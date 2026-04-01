@@ -1,0 +1,507 @@
+const fileInput = document.getElementById("jsonFile");
+const fileNameDisplay = document.getElementById("fileNameDisplay");
+const preview = document.getElementById("preview");
+const runBtn = document.getElementById("runBtn");
+const stopBtn = document.getElementById("stopBtn");
+const logList = document.getElementById("logList");
+const templateSelect = document.getElementById("templateSelect");
+const flowSelect = document.getElementById("flowSelect");
+const flowDataFile = document.getElementById("flowDataFile");
+const flowFileNameDisplay = document.getElementById("flowFileNameDisplay");
+const progressDisplay = document.getElementById("progressDisplay");
+const progressBar = document.getElementById("progressBar");
+const progressText = document.getElementById("progressText");
+const clearLogBtn = document.getElementById("clearLogBtn");
+
+let currentMode = "upload";
+let parsedPayload = null;
+let selectedFieldConfigs = null;
+let storageData = {};
+let isRunning = false;
+
+// Flow mode state
+let flowConfiguration = null;
+let flowDataItems = null;
+let flowStartUrl = null;
+
+// ── Init ─────────────────────────────────────────────────────────
+
+document.addEventListener("DOMContentLoaded", async () => {
+  storageData = await loadOrMigrateStorage();
+
+  currentMode = storageData[STORAGE_KEYS.LAST_INPUT_MODE] || "upload";
+  activateMode(currentMode);
+  populateTemplates();
+  populateFlows();
+
+  if (currentMode === "template") loadSelectedTemplate();
+  if (currentMode === "flow") loadSelectedFlow();
+
+  chrome.runtime.sendMessage({ type: "IS_RUNNING" }, (response) => {
+    if (chrome.runtime.lastError) return;
+    if (response?.running) {
+      setRunning(true);
+      log("info", "Automation is running...");
+      if (response.progress) {
+        updateProgress(response.progress.current, response.progress.total);
+      }
+    }
+  });
+});
+
+// Listen for messages from background (results, progress, live logs)
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type === "AUTOMATION_RESULT") {
+    setRunning(false);
+    hideProgress();
+    if (msg.stopped) {
+      log("warn", msg.error || "Automation stopped.");
+    } else if (msg.ok) {
+      log("ok", msg.message || "Automation completed.");
+    } else {
+      log("err", msg.error || "Unknown error.");
+    }
+  }
+
+  if (msg.type === "FLOW_PROGRESS") {
+    updateProgress(msg.current, msg.total, msg.phase);
+  }
+
+  if (msg.type === "FLOW_RESULT") {
+    setRunning(false);
+    hideProgress();
+    if (msg.stopped) {
+      log("warn", `Stopped. Completed ${msg.completed || 0}/${msg.total || "?"} requests.`);
+    } else if (msg.ok) {
+      log("ok", msg.message || `All ${msg.completed} requests completed.`);
+    } else {
+      log("err", msg.error || "Flow failed.");
+    }
+  }
+
+  if (msg.type === "STEP_LOG") {
+    log("step", msg.text);
+  }
+});
+
+// ── Mode tabs ────────────────────────────────────────────────────
+
+document.querySelectorAll(".mode-tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    currentMode = tab.dataset.mode;
+    activateMode(currentMode);
+    chrome.storage.sync.set({ [STORAGE_KEYS.LAST_INPUT_MODE]: currentMode });
+    resetState();
+
+    if (currentMode === "template") loadSelectedTemplate();
+    if (currentMode === "flow") loadSelectedFlow();
+  });
+});
+
+function activateMode(mode) {
+  document.querySelectorAll(".mode-tab").forEach((t) => t.classList.toggle("active", t.dataset.mode === mode));
+  document.getElementById("modeUpload").classList.toggle("hidden", mode !== "upload");
+  document.getElementById("modeTemplate").classList.toggle("hidden", mode !== "template");
+  document.getElementById("modeFlow").classList.toggle("hidden", mode !== "flow");
+}
+
+function resetState() {
+  parsedPayload = null;
+  selectedFieldConfigs = null;
+  flowConfiguration = null;
+  flowDataItems = null;
+  flowStartUrl = null;
+  runBtn.disabled = true;
+  preview.classList.add("hidden");
+  hideProgress();
+}
+
+// ── Upload mode ──────────────────────────────────────────────────
+
+fileInput.addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const raw = JSON.parse(reader.result);
+      handleUploadedJson(raw, file.name);
+    } catch (err) {
+      showPreviewError([`Invalid JSON: ${err.message}`]);
+      resetState();
+    }
+  };
+  reader.readAsText(file);
+});
+
+function handleUploadedJson(raw, fileName) {
+  if (Array.isArray(raw.configuration) && Array.isArray(raw.data)) {
+    const configs = raw.configuration;
+    const dataArr = raw.data;
+
+    if (dataArr.length === 0) {
+      showPreviewError(["Data array is empty. Add at least one request object."]);
+      resetState();
+      return;
+    }
+
+    const isOldFormat = dataArr.length > 0 && dataArr[0].key !== undefined && dataArr[0].value !== undefined
+      && typeof dataArr[0].key === "string";
+
+    if (isOldFormat) {
+      const flat = {};
+      for (const entry of dataArr) flat[entry.key] = entry.value;
+      parsedPayload = flat;
+      selectedFieldConfigs = configs;
+      flowConfiguration = null;
+      flowDataItems = null;
+      flowStartUrl = null;
+    } else if (dataArr.length === 1) {
+      const result = validateInput(dataArr[0]);
+      if (!result.valid) {
+        showPreviewError(result.errors);
+        resetState();
+        return;
+      }
+      parsedPayload = result.data;
+      selectedFieldConfigs = configs;
+      flowConfiguration = null;
+      flowDataItems = null;
+      flowStartUrl = null;
+    } else {
+      flowConfiguration = configs;
+      flowDataItems = dataArr;
+      flowStartUrl = raw.startUrl || null;
+      parsedPayload = null;
+      selectedFieldConfigs = null;
+    }
+  } else {
+    const result = validateInput(raw);
+    if (!result.valid) {
+      showPreviewError(result.errors);
+      resetState();
+      return;
+    }
+    parsedPayload = result.data;
+    selectedFieldConfigs = null;
+    flowConfiguration = null;
+    flowDataItems = null;
+    flowStartUrl = null;
+  }
+
+  fileNameDisplay.textContent = fileName || "Loaded";
+  fileInput.closest(".file-label").classList.add("loaded");
+
+  if (flowDataItems) {
+    showPreviewSuccess({ mode: "batch", requests: flowDataItems.length, startUrl: flowStartUrl || "(none)", fields: flowConfiguration.length });
+  } else {
+    showPreviewSuccess(parsedPayload);
+  }
+
+  runBtn.disabled = false;
+  clearLog();
+}
+
+// ── Template mode ────────────────────────────────────────────────
+
+function populateTemplates() {
+  const tpls = storageData[STORAGE_KEYS.TEMPLATES] || [];
+  templateSelect.innerHTML = '<option value="">Select a template...</option>';
+  tpls.forEach((tpl) => {
+    const opt = document.createElement("option");
+    opt.value = tpl.id;
+    opt.textContent = tpl.name;
+    templateSelect.appendChild(opt);
+  });
+
+  const lastId = storageData[STORAGE_KEYS.LAST_TEMPLATE_ID];
+  if (lastId) templateSelect.value = lastId;
+}
+
+templateSelect.addEventListener("change", () => {
+  chrome.storage.sync.set({ [STORAGE_KEYS.LAST_TEMPLATE_ID]: templateSelect.value });
+  loadSelectedTemplate();
+});
+
+function loadSelectedTemplate() {
+  const tplId = templateSelect.value;
+  if (!tplId) {
+    resetState();
+    return;
+  }
+  chrome.storage.sync.get(STORAGE_KEYS.TEMPLATES, (data) => {
+    const tpls = data[STORAGE_KEYS.TEMPLATES] || [];
+    const tpl = tpls.find((t) => t.id === tplId);
+    if (!tpl) {
+      showPreviewError(["Template not found."]);
+      resetState();
+      return;
+    }
+    const result = validateInput(tpl.payload);
+    if (!result.valid) {
+      showPreviewError(result.errors);
+      resetState();
+      return;
+    }
+    parsedPayload = result.data;
+    selectedFieldConfigs = tpl.fieldConfigs || null;
+    showPreviewSuccess(parsedPayload);
+    runBtn.disabled = false;
+  });
+}
+
+// ── Flow mode ────────────────────────────────────────────────────
+
+function populateFlows() {
+  const allFlows = storageData[STORAGE_KEYS.FLOWS] || [];
+  flowSelect.innerHTML = '<option value="">Select a flow...</option>';
+  allFlows.forEach((flow) => {
+    const opt = document.createElement("option");
+    opt.value = flow.id;
+    opt.textContent = flow.name;
+    flowSelect.appendChild(opt);
+  });
+
+  const lastId = storageData[STORAGE_KEYS.LAST_FLOW_ID];
+  if (lastId) flowSelect.value = lastId;
+}
+
+flowSelect.addEventListener("change", () => {
+  chrome.storage.sync.set({ [STORAGE_KEYS.LAST_FLOW_ID]: flowSelect.value });
+  loadSelectedFlow();
+});
+
+function loadSelectedFlow() {
+  const flowId = flowSelect.value;
+  if (!flowId) {
+    resetState();
+    return;
+  }
+
+  chrome.storage.sync.get([STORAGE_KEYS.FLOWS, STORAGE_KEYS.TEMPLATES], (data) => {
+    const allFlows = data[STORAGE_KEYS.FLOWS] || [];
+    const allTemplates = data[STORAGE_KEYS.TEMPLATES] || [];
+    const flow = allFlows.find((f) => f.id === flowId);
+    if (!flow) {
+      showPreviewError(["Flow not found."]);
+      resetState();
+      return;
+    }
+
+    const mergedConfigs = [];
+    for (const tplId of (flow.templateIds || [])) {
+      const tpl = allTemplates.find((t) => t.id === tplId);
+      if (tpl && tpl.fieldConfigs) {
+        mergedConfigs.push(...tpl.fieldConfigs.filter((f) => f.enabled !== false));
+      }
+    }
+
+    if (mergedConfigs.length === 0) {
+      showPreviewError(["Flow has no configured fields. Add templates with fields."]);
+      resetState();
+      return;
+    }
+
+    flowConfiguration = mergedConfigs;
+    flowStartUrl = flow.startUrl || null;
+    flowDataItems = null;
+    parsedPayload = null;
+    selectedFieldConfigs = null;
+
+    showPreviewSuccess({
+      flow: flow.name,
+      templates: flow.templateIds.length,
+      fields: mergedConfigs.length,
+      startUrl: flowStartUrl || "(none)",
+      status: "Upload data JSON to run batch",
+    });
+
+    runBtn.disabled = true;
+  });
+}
+
+flowDataFile.addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const raw = JSON.parse(reader.result);
+      let items;
+
+      if (Array.isArray(raw)) {
+        items = raw;
+      } else if (raw.data && Array.isArray(raw.data)) {
+        items = raw.data;
+        if (raw.startUrl && !flowStartUrl) flowStartUrl = raw.startUrl;
+        if (raw.configuration && Array.isArray(raw.configuration)) {
+          flowConfiguration = raw.configuration.filter((f) => f.enabled !== false);
+        }
+      } else if (typeof raw === "object" && !Array.isArray(raw)) {
+        items = [raw];
+      } else {
+        throw new Error("Expected an array of request objects or { data: [...] }");
+      }
+
+      if (items.length === 0) {
+        showPreviewError(["Data array is empty."]);
+        flowDataItems = null;
+        runBtn.disabled = true;
+        return;
+      }
+
+      if (items[0].key !== undefined && items[0].value !== undefined && typeof items[0].key === "string") {
+        const flat = {};
+        for (const entry of items) flat[entry.key] = entry.value;
+        items = [flat];
+      }
+
+      flowDataItems = items;
+      flowFileNameDisplay.textContent = file.name;
+      flowDataFile.closest(".file-label").classList.add("loaded");
+
+      showPreviewSuccess({
+        mode: "batch",
+        requests: items.length,
+        fields: flowConfiguration ? flowConfiguration.length : "?",
+        startUrl: flowStartUrl || "(none)",
+      });
+      runBtn.disabled = !flowConfiguration;
+      clearLog();
+    } catch (err) {
+      showPreviewError([`Invalid JSON: ${err.message}`]);
+      flowDataItems = null;
+      runBtn.disabled = true;
+    }
+  };
+  reader.readAsText(file);
+});
+
+// ── Run automation ───────────────────────────────────────────────
+
+runBtn.addEventListener("click", () => {
+  setRunning(true);
+  clearLog();
+
+  if ((currentMode === "flow" || flowDataItems) && flowConfiguration && flowDataItems) {
+    log("info", `Starting batch: ${flowDataItems.length} request(s)...`);
+    showProgress(0, flowDataItems.length);
+
+    const msg = {
+      type: "RUN_FLOW",
+      configuration: flowConfiguration,
+      data: flowDataItems,
+      startUrl: flowStartUrl || null,
+    };
+
+    chrome.runtime.sendMessage(msg, (response) => {
+      if (chrome.runtime.lastError) {
+        setRunning(false);
+        hideProgress();
+        log("err", `Extension error: ${chrome.runtime.lastError.message}`);
+        return;
+      }
+      if (!response) return;
+    });
+    return;
+  }
+
+  if (!parsedPayload) return;
+  log("info", "Running automation...");
+
+  const msg = { type: "RUN_AUTOMATION", payload: parsedPayload };
+  if (selectedFieldConfigs) msg.fieldConfigs = selectedFieldConfigs;
+
+  chrome.runtime.sendMessage(msg, (response) => {
+    if (chrome.runtime.lastError) {
+      setRunning(false);
+      log("err", `Extension error: ${chrome.runtime.lastError.message}`);
+    }
+  });
+});
+
+stopBtn.addEventListener("click", () => {
+  log("warn", "Stopping automation...");
+  chrome.runtime.sendMessage({ type: "STOP_AUTOMATION" }, (response) => {
+    if (chrome.runtime.lastError || !response?.ok) {
+      log("err", "Could not stop — automation may have already finished.");
+    }
+  });
+});
+
+clearLogBtn.addEventListener("click", () => clearLog());
+
+function setRunning(running) {
+  isRunning = running;
+  runBtn.classList.toggle("hidden", running);
+  stopBtn.classList.toggle("hidden", !running);
+  if (!running) {
+    const canRun = parsedPayload || (flowConfiguration && flowDataItems);
+    runBtn.disabled = !canRun;
+  }
+}
+
+// ── Progress ─────────────────────────────────────────────────────
+
+function showProgress(current, total) {
+  progressDisplay.classList.remove("hidden");
+  updateProgress(current, total);
+}
+
+function updateProgress(current, total, phase) {
+  progressDisplay.classList.remove("hidden");
+  if (phase === "running") {
+    const completed = current;
+    const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+    progressBar.style.width = `${pct}%`;
+    progressText.textContent = `Running request ${current + 1} of ${total}  (${completed} done)`;
+  } else {
+    const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+    progressBar.style.width = `${pct}%`;
+    progressText.textContent = `Completed ${current}/${total}`;
+  }
+}
+
+function hideProgress() {
+  progressDisplay.classList.add("hidden");
+  progressBar.style.width = "0%";
+  progressText.textContent = "";
+}
+
+// ── Helpers ──────────────────────────────────────────────────────
+
+function showPreviewSuccess(data) {
+  preview.classList.remove("hidden");
+  preview.textContent = JSON.stringify(data, null, 2);
+  preview.style.color = "#166534";
+}
+
+function showPreviewError(errors) {
+  preview.classList.remove("hidden");
+  preview.textContent = errors.join("\n");
+  preview.style.color = "#dc2626";
+}
+
+function log(level, message) {
+  const li = document.createElement("li");
+
+  const dot = document.createElement("span");
+  dot.className = `dot dot-${level}`;
+  li.appendChild(dot);
+
+  const ts = document.createElement("span");
+  ts.className = "timestamp";
+  const now = new Date();
+  ts.textContent = now.toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  li.appendChild(ts);
+
+  const msgSpan = document.createElement("span");
+  msgSpan.className = "log-msg";
+  msgSpan.textContent = message;
+  li.appendChild(msgSpan);
+
+  logList.appendChild(li);
+  logList.scrollTop = logList.scrollHeight;
+}
+
+function clearLog() { logList.innerHTML = ""; }

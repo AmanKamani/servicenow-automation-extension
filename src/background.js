@@ -1,9 +1,16 @@
 importScripts("storage-defaults.js");
 
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+
 let runningTabId = null;
 let runningFlowState = null; // { current, total, aborted }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.type === "STEP_LOG") {
+    chrome.runtime.sendMessage({ type: "STEP_LOG", text: msg.text }).catch(() => {});
+    return;
+  }
+
   if (msg.type === "RUN_AUTOMATION") {
     runOnActiveTab(msg.payload, msg.fieldConfigs)
       .then((res) => sendResponse(res))

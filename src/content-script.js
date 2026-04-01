@@ -729,5 +729,8 @@
     });
   }
 
-  function reportStep(msg) { console.log("[SN Group Join]", msg); }
+  function reportStep(msg) {
+    console.log("[SN Group Join]", msg);
+    try { chrome.runtime.sendMessage({ type: "STEP_LOG", text: msg }); } catch (_) {}
+  }
 })();

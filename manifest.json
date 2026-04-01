@@ -3,15 +3,18 @@
   "name": "ServiceNow Group Join Automator",
   "version": "1.0.0",
   "description": "Automates AD group join/remove requests on ServiceNow portals.",
-  "permissions": ["activeTab", "storage", "scripting"],
+  "permissions": ["activeTab", "storage", "scripting", "sidePanel"],
   "host_permissions": ["https://*.service-now.com/*", "https://*/*"],
   "action": {
-    "default_popup": "src/popup.html",
+    "default_title": "Open SN Group Join panel",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     }
+  },
+  "side_panel": {
+    "default_path": "src/sidepanel.html"
   },
   "options_ui": {
     "page": "src/options.html",
