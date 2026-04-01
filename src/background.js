@@ -104,8 +104,8 @@ async function runFlow(configuration, dataItems, startUrl) {
         throw new Error("STOPPED");
       }
 
-      runningFlowState.current = i + 1;
-      broadcastProgress(i + 1, dataItems.length);
+      runningFlowState.current = i;
+      broadcastProgress(i, dataItems.length, "running");
 
       // Navigate to startUrl for items after the first
       if (i > 0 && startUrl) {
@@ -141,6 +141,9 @@ async function runFlow(configuration, dataItems, startUrl) {
         broadcastFlowResult(result);
         return result;
       }
+
+      // Item completed — update progress
+      broadcastProgress(i + 1, dataItems.length, "done");
     }
 
     const result = { ok: true, message: `All ${dataItems.length} request(s) completed.`, completed: dataItems.length, total: dataItems.length };
@@ -194,8 +197,8 @@ function navigateAndWait(tabId, url) {
 
 // ── Progress broadcast ───────────────────────────────────────────
 
-function broadcastProgress(current, total) {
-  chrome.runtime.sendMessage({ type: "FLOW_PROGRESS", current, total }).catch(() => {});
+function broadcastProgress(current, total, phase) {
+  chrome.runtime.sendMessage({ type: "FLOW_PROGRESS", current, total, phase }).catch(() => {});
 }
 
 function broadcastFlowResult(result) {

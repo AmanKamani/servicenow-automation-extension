@@ -64,7 +64,7 @@ chrome.runtime.onMessage.addListener((msg) => {
   }
 
   if (msg.type === "FLOW_PROGRESS") {
-    updateProgress(msg.current, msg.total);
+    updateProgress(msg.current, msg.total, msg.phase);
   }
 
   if (msg.type === "FLOW_RESULT") {
@@ -454,11 +454,18 @@ function showProgress(current, total) {
   updateProgress(current, total);
 }
 
-function updateProgress(current, total) {
+function updateProgress(current, total, phase) {
   progressDisplay.classList.remove("hidden");
-  const pct = total > 0 ? Math.round((current / total) * 100) : 0;
-  progressBar.style.width = `${pct}%`;
-  progressText.textContent = `Request ${current}/${total}`;
+  if (phase === "running") {
+    const completed = current;
+    const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+    progressBar.style.width = `${pct}%`;
+    progressText.textContent = `Running request ${current + 1} of ${total}  (${completed} done)`;
+  } else {
+    const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+    progressBar.style.width = `${pct}%`;
+    progressText.textContent = `Completed ${current}/${total}`;
+  }
 }
 
 function hideProgress() {
