@@ -25,6 +25,12 @@
         <button id="newTemplateBtn" class="btn btn-primary btn-sm">+ New</button>
       </div>
       <div id="templateList" class="template-list"></div>
+      <div class="sidebar-divider"></div>
+      <div class="panel-header">
+        <h2>Flows</h2>
+        <button id="newFlowBtn" class="btn btn-primary btn-sm">+ New</button>
+      </div>
+      <div id="flowList" class="template-list"></div>
     </aside>
 
     <!-- ─── Column 2: Editor ─── -->
@@ -85,6 +91,31 @@
           </div>
         </section>
       </div>
+
+      <!-- Flow editor content (hidden until a flow is selected/created) -->
+      <div id="flowEditorContent" class="editor-content hidden">
+        <div class="editor-top">
+          <input type="text" id="flowNameInput" class="template-name-input" placeholder="Flow name">
+          <span id="flowEditingBadge" class="badge badge-editing hidden">Editing</span>
+          <span id="flowNewBadge" class="badge badge-new hidden">New</span>
+        </div>
+
+        <section class="editor-section">
+          <h3>Start URL</h3>
+          <p class="hint">The page to navigate to before each request in a batch (e.g. the "New Request" page URL).</p>
+          <input type="text" id="flowStartUrl" placeholder="https://mycompany.service-now.com/sp?id=sc_cat_item&sys_id=...">
+        </section>
+
+        <section class="editor-section">
+          <div class="section-header">
+            <h3>Templates in Flow</h3>
+            <button id="addFlowTemplateBtn" class="btn btn-sm">+ Add Template</button>
+          </div>
+          <p class="hint">Templates execute in order. Each template fills fields and clicks buttons as configured.</p>
+          <div id="flowTemplateList" class="field-list"></div>
+          <div id="flowTemplateEmpty" class="payload-empty">No templates added yet. Click "+ Add Template" to build your flow.</div>
+        </section>
+      </div>
     </main>
 
     <!-- ─── Column 3: Actions ─── -->
@@ -94,16 +125,13 @@
         <button id="updateBtn" class="btn btn-primary btn-block hidden">Update Template</button>
         <button id="duplicateBtn" class="btn btn-block hidden">Duplicate</button>
         <button id="deleteCurrentBtn" class="btn btn-danger btn-block hidden">Delete Template</button>
+        <button id="saveFlowBtn" class="btn btn-primary btn-block hidden">Save Flow</button>
+        <button id="updateFlowBtn" class="btn btn-primary btn-block hidden">Update Flow</button>
+        <button id="exportFlowBtn" class="btn btn-block hidden">Export Flow JSON</button>
+        <button id="deleteFlowBtn" class="btn btn-danger btn-block hidden">Delete Flow</button>
       </div>
       <div class="action-divider"></div>
-      <div class="action-info">
-        <h4>How It Works</h4>
-        <ol class="how-list">
-          <li>Create or select a template</li>
-          <li>Fill payload values &amp; configure fields</li>
-          <li>Open ServiceNow, click popup, choose template, run</li>
-        </ol>
-      </div>
+      <div id="howItWorks" class="action-info"></div>
     </aside>
 
   </div>

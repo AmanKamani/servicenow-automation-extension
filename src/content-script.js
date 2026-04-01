@@ -55,20 +55,96 @@
       checkAborted();
       const cfg = fieldConfigs[i];
       const name = cfg.displayName || cfg.key;
-      const value = payload[cfg.key];
+      const value = payload[cfg.key] ?? cfg.defaultValue ?? undefined;
+
+      // ── Expand field type — click a section toggle to reveal hidden fields ──
+      if (cfg.fieldType === "expand") {
+        const matchTexts = (cfg.labelMatch || []).map((m) => m.toLowerCase());
+        if (matchTexts.length === 0) {
+          reportStep(`Skipping expand "${name}" — no label match configured.`);
+          continue;
+        }
+        reportStep(`[${i + 1}/${fieldConfigs.length}] Expanding section "${name}"...`);
+
+        const trigger = await waitForExpandTrigger(matchTexts);
+        reportStep(`  Found: <${trigger.tagName.toLowerCase()}> class="${(trigger.className || "").substring(0, 80)}"`);
+        simulateClick(trigger);
+        reportStep(`  Clicked expand trigger.`);
+
+        const waitMode = cfg.buttonWait || "smart_wait";
+        if (waitMode === "no_wait") {
+          await sleep(300);
+        } else if (waitMode === "fixed_wait") {
+          const ms = cfg.buttonWaitMs || 3000;
+          reportStep(`  Fixed wait: ${ms}ms...`);
+          await sleep(ms);
+        } else if (waitMode === "url_change") {
+          const urlBefore = window.location.href;
+          reportStep(`  Waiting for URL to change...`);
+          await waitForUrlChange(urlBefore, 30000);
+        } else {
+          const nextCfg = fieldConfigs[i + 1];
+          if (nextCfg && nextCfg.labelMatch && nextCfg.labelMatch.length > 0) {
+            reportStep(`  Smart wait: waiting for label "${nextCfg.labelMatch[0]}"...`);
+            await waitForLabel(nextCfg.labelMatch, 30000);
+            reportStep(`  Next field label found.`);
+          } else if (nextCfg && nextCfg.fieldType === "button") {
+            const nextBtnText = nextCfg.displayName || nextCfg.key;
+            reportStep(`  Smart wait: waiting for button "${nextBtnText}"...`);
+            await waitForButton(nextBtnText, 50);
+          } else {
+            await sleep(2000);
+          }
+        }
+        continue;
+      }
 
       // ── Button field type — find and click a button by its text ──
       if (cfg.fieldType === "button") {
-        const btnText = value || cfg.displayName || cfg.key;
+        const btnText = cfg.displayName || cfg.key;
         if (!btnText) {
           reportStep(`Skipping button "${name}" — no button text specified.`);
           continue;
         }
         reportStep(`[${i + 1}/${fieldConfigs.length}] Clicking button "${btnText}"...`);
+
+        const waitMode = cfg.buttonWait || "smart_wait";
+        const urlBefore = window.location.href;
+
         const btn = await waitForButton(btnText);
         simulateClick(btn);
         reportStep(`  Clicked button "${btnText}".`);
-        await sleep(1500);
+
+        if (waitMode === "no_wait") {
+          await sleep(300);
+        } else if (waitMode === "fixed_wait") {
+          const ms = cfg.buttonWaitMs || 3000;
+          reportStep(`  Fixed wait: ${ms}ms...`);
+          await sleep(ms);
+        } else if (waitMode === "url_change") {
+          reportStep(`  Waiting for URL to change...`);
+          await waitForUrlChange(urlBefore, 30000);
+          reportStep(`  URL changed.`);
+        } else {
+          // smart_wait: wait for next field's label or button text to appear
+          const nextCfg = fieldConfigs[i + 1];
+          if (nextCfg) {
+            if (nextCfg.fieldType === "button") {
+              const nextBtnText = nextCfg.displayName || nextCfg.key;
+              reportStep(`  Smart wait: waiting for button "${nextBtnText}"...`);
+              await waitForButton(nextBtnText, 50);
+              reportStep(`  Next button found.`);
+            } else if (nextCfg.labelMatch && nextCfg.labelMatch.length > 0) {
+              reportStep(`  Smart wait: waiting for label "${nextCfg.labelMatch[0]}"...`);
+              await waitForLabel(nextCfg.labelMatch, 30000);
+              reportStep(`  Next field label found.`);
+            } else {
+              await sleep(2000);
+            }
+          } else {
+            await sleep(1000);
+          }
+        }
         continue;
       }
 
@@ -529,6 +605,108 @@
         setTimeout(check, RETRY_INTERVAL);
       };
       check();
+    });
+  }
+
+  // ────────────────────────────────────────────────────────────────
+  // Expand trigger finder — finds element by label match text, then
+  // walks up to the nearest clickable parent and clicks that.
+  // ────────────────────────────────────────────────────────────────
+
+  function waitForExpandTrigger(matchTexts, retries = MAX_RETRIES) {
+    return new Promise((resolve, reject) => {
+      let attempt = 0;
+      const check = () => {
+        if (_aborted) return reject(new Error("STOPPED"));
+
+        const result = findExpandTrigger(matchTexts);
+        if (result) return resolve(result);
+
+        attempt++;
+        if (attempt >= retries) {
+          reject(new Error(
+            `Expand trigger not found for matches: ${JSON.stringify(matchTexts)}.\n` +
+            `Verify the label text in Options matches visible text on the SN page.`
+          ));
+          return;
+        }
+        setTimeout(check, RETRY_INTERVAL);
+      };
+      check();
+    });
+  }
+
+  function findExpandTrigger(matchTexts) {
+    // Step 1: Find the deepest element whose own text matches
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let matchedNode = null;
+    while (walker.nextNode()) {
+      const text = walker.currentNode.textContent.toLowerCase().trim();
+      if (!text) continue;
+      for (const match of matchTexts) {
+        if (text.includes(match)) {
+          matchedNode = walker.currentNode.parentElement;
+          break;
+        }
+      }
+      if (matchedNode) break;
+    }
+
+    if (!matchedNode || !_isVisibleCS(matchedNode)) return null;
+
+    // Step 2: Walk up to the nearest clickable parent
+    let el = matchedNode;
+    for (let i = 0; i < 15; i++) {
+      if (!el || el === document.body) break;
+      const clickable =
+        el.tagName === "A" ||
+        el.tagName === "BUTTON" ||
+        el.tagName === "SUMMARY" ||
+        el.getAttribute("role") === "button" ||
+        el.hasAttribute("data-toggle") ||
+        el.hasAttribute("aria-expanded") ||
+        el.style.cursor === "pointer" ||
+        window.getComputedStyle(el).cursor === "pointer" ||
+        el.getAttribute("tabindex") !== null;
+      if (clickable) {
+        return el;
+      }
+      el = el.parentElement;
+    }
+
+    // Fallback: return the matched element itself
+    return matchedNode;
+  }
+
+  function waitForUrlChange(originalUrl, timeoutMs = 30000) {
+    return new Promise((resolve, reject) => {
+      const start = Date.now();
+      const check = () => {
+        if (_aborted) return reject(new Error("STOPPED"));
+        if (window.location.href !== originalUrl) return resolve();
+        if (Date.now() - start > timeoutMs) return resolve();
+        setTimeout(check, 300);
+      };
+      setTimeout(check, 500);
+    });
+  }
+
+  function waitForLabel(labelMatches, timeoutMs = 30000) {
+    return new Promise((resolve, reject) => {
+      const start = Date.now();
+      const check = () => {
+        if (_aborted) return reject(new Error("STOPPED"));
+        const labels = document.querySelectorAll("label");
+        for (const label of labels) {
+          const text = label.textContent.toLowerCase().trim();
+          for (const match of labelMatches) {
+            if (text.includes(match.toLowerCase())) return resolve();
+          }
+        }
+        if (Date.now() - start > timeoutMs) return resolve();
+        setTimeout(check, 500);
+      };
+      setTimeout(check, 500);
     });
   }
 

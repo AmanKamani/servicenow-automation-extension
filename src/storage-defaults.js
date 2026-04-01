@@ -10,6 +10,8 @@ const STORAGE_KEYS = {
   TEMPLATES: "templates",
   LAST_INPUT_MODE: "lastInputMode",
   LAST_TEMPLATE_ID: "lastTemplateId",
+  FLOWS: "flows",
+  LAST_FLOW_ID: "lastFlowId",
 };
 
 const DEFAULT_FIELD_CONFIGS = [
@@ -77,6 +79,9 @@ async function loadOrMigrateStorage() {
   }
   if (!data[STORAGE_KEYS.LAST_INPUT_MODE]) {
     updates[STORAGE_KEYS.LAST_INPUT_MODE] = "upload";
+  }
+  if (!data[STORAGE_KEYS.FLOWS]) {
+    updates[STORAGE_KEYS.FLOWS] = [];
   }
 
   if (Object.keys(updates).length > 0) {

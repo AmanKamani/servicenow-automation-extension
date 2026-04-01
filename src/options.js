@@ -1,10 +1,17 @@
 let fieldConfigs = [];
 let templates = [];
 let payloadValues = {};
+let flows = [];
 
 // The template currently being edited, or null for a brand-new template
 let activeTemplateId = null;
+// The flow currently being edited, or null
+let activeFlowId = null;
+let flowTemplateIds = [];
+
 let _autoSaveTimer = null;
+// Track which editor is active: "template", "flow", or null
+let activeEditorType = null;
 
 document.addEventListener("DOMContentLoaded", async () => {
   const data = await loadOrMigrateStorage();
@@ -12,11 +19,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("domain").value = data.domain || "";
   fieldConfigs = data[STORAGE_KEYS.FIELD_CONFIGS] || JSON.parse(JSON.stringify(DEFAULT_FIELD_CONFIGS));
   templates = data[STORAGE_KEYS.TEMPLATES] || [];
+  flows = data[STORAGE_KEYS.FLOWS] || [];
 
   renderTemplateList();
+  renderFlowList();
 
   // Wire sidebar click (once, uses event delegation)
   document.getElementById("templateList").addEventListener("click", handleSidebarClick);
+  document.getElementById("flowList").addEventListener("click", handleFlowSidebarClick);
 
   // Wire field list events (once, uses event delegation)
   const fieldListEl = document.getElementById("fieldList");
@@ -27,7 +37,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Wire payload form events (once, uses event delegation)
   document.getElementById("payloadForm").addEventListener("input", handlePayloadInput);
 
-  // Wire buttons
+  // Wire flow template list events (delegation)
+  document.getElementById("flowTemplateList").addEventListener("click", handleFlowTemplateAction);
+
+  // Wire template buttons
   document.getElementById("newTemplateBtn").addEventListener("click", startNewTemplate);
   document.getElementById("saveNewBtn").addEventListener("click", handleSaveNew);
   document.getElementById("updateBtn").addEventListener("click", handleUpdate);
@@ -40,6 +53,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("exportFieldsBtn").addEventListener("click", exportFields);
   document.getElementById("exportPayloadBtn").addEventListener("click", exportPayload);
   document.getElementById("templateNameInput").addEventListener("input", scheduleAutoSave);
+
+  // Wire flow buttons
+  document.getElementById("newFlowBtn").addEventListener("click", startNewFlow);
+  document.getElementById("saveFlowBtn").addEventListener("click", handleSaveFlow);
+  document.getElementById("updateFlowBtn").addEventListener("click", handleUpdateFlow);
+  document.getElementById("exportFlowBtn").addEventListener("click", exportFlow);
+  document.getElementById("deleteFlowBtn").addEventListener("click", handleDeleteFlow);
+  document.getElementById("addFlowTemplateBtn").addEventListener("click", addFlowTemplate);
+  document.getElementById("flowNameInput").addEventListener("input", scheduleFlowAutoSave);
+  document.getElementById("flowStartUrl").addEventListener("input", scheduleFlowAutoSave);
+
   document.getElementById("domain").addEventListener("change", persistDomain);
   document.getElementById("reloadExtLink").addEventListener("click", (e) => {
     e.preventDefault();
@@ -86,34 +110,102 @@ function handleSidebarClick(e) {
 // ── Editor state ─────────────────────────────────────────────────
 
 function showEmptyState() {
+  activeEditorType = null;
   document.getElementById("emptyState").classList.remove("hidden");
   document.getElementById("editorContent").classList.add("hidden");
+  document.getElementById("flowEditorContent").classList.add("hidden");
   updateActionButtons();
 }
 
 function showEditor() {
+  activeEditorType = "template";
   document.getElementById("emptyState").classList.add("hidden");
   document.getElementById("editorContent").classList.remove("hidden");
+  document.getElementById("flowEditorContent").classList.add("hidden");
+  updateActionButtons();
+}
+
+function showFlowEditor() {
+  activeEditorType = "flow";
+  document.getElementById("emptyState").classList.add("hidden");
+  document.getElementById("editorContent").classList.add("hidden");
+  document.getElementById("flowEditorContent").classList.remove("hidden");
   updateActionButtons();
 }
 
 function updateActionButtons() {
-  const isNew = activeTemplateId === null;
-  const hasEditor = !document.getElementById("editorContent").classList.contains("hidden");
+  const isTpl = activeEditorType === "template";
+  const isFlow = activeEditorType === "flow";
+  const tplIsNew = activeTemplateId === null;
+  const flowIsNew = activeFlowId === null;
 
-  document.getElementById("saveNewBtn").classList.toggle("hidden", !hasEditor || !isNew);
-  document.getElementById("updateBtn").classList.toggle("hidden", !hasEditor || isNew);
-  document.getElementById("duplicateBtn").classList.toggle("hidden", !hasEditor || isNew);
-  document.getElementById("deleteCurrentBtn").classList.toggle("hidden", !hasEditor || isNew);
+  // Template buttons
+  document.getElementById("saveNewBtn").classList.toggle("hidden", !isTpl || !tplIsNew);
+  document.getElementById("updateBtn").classList.toggle("hidden", !isTpl || tplIsNew);
+  document.getElementById("duplicateBtn").classList.toggle("hidden", !isTpl || tplIsNew);
+  document.getElementById("deleteCurrentBtn").classList.toggle("hidden", !isTpl || tplIsNew);
 
-  document.getElementById("editingBadge").classList.toggle("hidden", isNew);
-  document.getElementById("newBadge").classList.toggle("hidden", !isNew);
+  // Template badges
+  document.getElementById("editingBadge").classList.toggle("hidden", !isTpl || tplIsNew);
+  document.getElementById("newBadge").classList.toggle("hidden", !isTpl || !tplIsNew);
+
+  // Flow buttons
+  document.getElementById("saveFlowBtn").classList.toggle("hidden", !isFlow || !flowIsNew);
+  document.getElementById("updateFlowBtn").classList.toggle("hidden", !isFlow || flowIsNew);
+  document.getElementById("exportFlowBtn").classList.toggle("hidden", !isFlow);
+  document.getElementById("deleteFlowBtn").classList.toggle("hidden", !isFlow || flowIsNew);
+
+  // Flow badges
+  document.getElementById("flowEditingBadge").classList.toggle("hidden", !isFlow || flowIsNew);
+  document.getElementById("flowNewBadge").classList.toggle("hidden", !isFlow || !flowIsNew);
+
+  updateHowItWorks();
+}
+
+function updateHowItWorks() {
+  const container = document.getElementById("howItWorks");
+  if (activeEditorType === "flow") {
+    container.innerHTML = `
+      <h4>How Flows Work</h4>
+      <ol class="how-list">
+        <li>Create templates for each page/step</li>
+        <li>Add templates to this flow in order</li>
+        <li>Set a <strong>Start URL</strong> — the page to navigate to before each batch item</li>
+        <li>Export the flow JSON, then fill the <code>data</code> array with one object per request</li>
+        <li>In the popup, choose <strong>Flow</strong> tab, select this flow, upload the JSON, and run</li>
+      </ol>
+      <div class="how-tip">
+        <strong>Tip:</strong> Each data object only needs keys for input fields. Action fields (button/expand) use their configured display name &amp; label match automatically.
+      </div>`;
+  } else if (activeEditorType === "template") {
+    container.innerHTML = `
+      <h4>How Templates Work</h4>
+      <ol class="how-list">
+        <li>Add fields in the order they appear on the page</li>
+        <li>Use <strong>Input</strong> types (typeahead, text, choice) for data entry fields</li>
+        <li>Use <strong>Action</strong> types (button, expand) for clicks &amp; toggles</li>
+        <li>Fill payload values above, or export JSON to upload later</li>
+        <li>In the popup, select this template and run</li>
+      </ol>
+      <div class="how-tip">
+        <strong>Tip:</strong> For buttons, the <em>Display Name</em> is the button text to find and click. For expand, <em>Label Match</em> is the toggle text.
+      </div>`;
+  } else {
+    container.innerHTML = `
+      <h4>Getting Started</h4>
+      <ol class="how-list">
+        <li>Click <strong>+ New</strong> under Templates to create a template</li>
+        <li>Configure fields to match your ServiceNow page</li>
+        <li>Optionally, create a <strong>Flow</strong> to chain templates for multi-page or batch automation</li>
+      </ol>`;
+  }
 }
 
 // ── New template ─────────────────────────────────────────────────
 
 function startNewTemplate() {
   activeTemplateId = null;
+  activeFlowId = null;
   fieldConfigs = [];
   payloadValues = {};
 
@@ -121,6 +213,7 @@ function startNewTemplate() {
   renderFieldList();
   renderPayloadForm();
   renderTemplateList();
+  renderFlowList();
   showEditor();
 
   document.getElementById("templateNameInput").focus();
@@ -130,6 +223,7 @@ function startNewTemplate() {
 
 function loadTemplate(tpl) {
   activeTemplateId = tpl.id;
+  activeFlowId = null;
 
   document.getElementById("templateNameInput").value = tpl.name || "";
   fieldConfigs = JSON.parse(JSON.stringify(tpl.fieldConfigs || []));
@@ -138,6 +232,7 @@ function loadTemplate(tpl) {
   renderFieldList();
   renderPayloadForm();
   renderTemplateList();
+  renderFlowList();
   showEditor();
 }
 
@@ -205,6 +300,7 @@ function handleDeleteCurrent() {
   activeTemplateId = null;
   persistTemplates();
   renderTemplateList();
+  renderFlowList();
   showEmptyState();
   showToast("Template deleted.");
 }
@@ -228,24 +324,35 @@ function renderPayloadForm() {
   fieldConfigs.forEach((cfg) => {
     const key = cfg.key;
     const label = cfg.displayName || key;
-    const currentValue = payloadValues[key];
     const isMulti = cfg.fieldType === "typeahead";
     const isButton = cfg.fieldType === "button";
+    const isExpand = cfg.fieldType === "expand";
+
+    if (isButton || isExpand) {
+      const row = document.createElement("div");
+      row.className = "payload-row payload-action-row" + (isButton ? " payload-action-button" : " payload-action-expand");
+      const badge = isButton ? "Button" : "Expand";
+      row.innerHTML = `<span class="payload-action-badge">${badge}</span><span class="payload-action-label">${esc(label)}</span>`;
+      container.appendChild(row);
+      return;
+    }
+
+    const currentValue = payloadValues[key];
 
     const row = document.createElement("div");
-    row.className = "payload-row" + (isButton ? " payload-row-button" : "");
+    row.className = "payload-row";
 
     const labelEl = document.createElement("label");
     labelEl.textContent = label;
-    if (isButton) {
-      const small = document.createElement("small");
-      small.textContent = " (button text)";
-      labelEl.appendChild(small);
-    } else if (isMulti) {
+    if (isMulti) {
       const small = document.createElement("small");
       small.textContent = " (one per line)";
       labelEl.appendChild(small);
     }
+    const keyTag = document.createElement("span");
+    keyTag.className = "payload-key-tag";
+    keyTag.textContent = key;
+    labelEl.appendChild(keyTag);
 
     let inputEl;
     if (isMulti && Array.isArray(currentValue)) {
@@ -263,7 +370,7 @@ function renderPayloadForm() {
     }
 
     inputEl.dataset.payKey = key;
-    inputEl.placeholder = isButton ? `e.g. Next, Submit, Order Now` : `Enter ${label.toLowerCase()}`;
+    inputEl.placeholder = `Enter ${label.toLowerCase()}`;
 
     row.appendChild(labelEl);
     row.appendChild(inputEl);
@@ -281,8 +388,10 @@ function handlePayloadInput(e) {
 function readPayloadFromForm() {
   const result = {};
   fieldConfigs.forEach((cfg) => {
+    if (cfg.fieldType === "button" || cfg.fieldType === "expand") return;
     const key = cfg.key;
-    const raw = payloadValues[key] || "";
+    let raw = payloadValues[key] || "";
+    if (!raw && cfg.defaultValue) raw = cfg.defaultValue;
 
     if (cfg.fieldType === "typeahead" && typeof raw === "string" && raw.includes("\n")) {
       result[key] = raw.split("\n").map((s) => s.trim()).filter(Boolean);
@@ -302,42 +411,74 @@ function renderFieldList() {
   container.innerHTML = "";
 
   fieldConfigs.forEach((cfg, idx) => {
+    const isAction = cfg.fieldType === "button" || cfg.fieldType === "expand";
+    const typeClassMap = { button: "field-item-button", expand: "field-item-expand", typeahead: "field-item-input", text: "field-item-input", choice: "field-item-input" };
+    const typeClass = typeClassMap[cfg.fieldType] || "field-item-input";
     const item = document.createElement("div");
-    item.className = "field-item" + (cfg.enabled === false ? " disabled-field" : "");
+    item.className = "field-item" + (cfg.enabled === false ? " disabled-field" : "") + (typeClass ? " " + typeClass : "");
+
+    const typeBadgeMap = {
+      button: '<span class="field-type-badge badge-button">Action: Button</span>',
+      expand: '<span class="field-type-badge badge-expand">Action: Expand</span>',
+      typeahead: '<span class="field-type-badge badge-input">Input: Typeahead</span>',
+      text: '<span class="field-type-badge badge-input">Input: Text</span>',
+      choice: '<span class="field-type-badge badge-input">Input: Choice</span>',
+    };
+    const typeBadge = typeBadgeMap[cfg.fieldType] || "";
+
     item.innerHTML = `
       <div class="field-arrows">
         <button data-dir="up" data-idx="${idx}" title="Move up">&uarr;</button>
         <button data-dir="down" data-idx="${idx}" title="Move down">&darr;</button>
       </div>
       <div class="field-body">
+        <div class="full-width field-badge-row">${typeBadge}</div>
         <div>
           <label title="Unique identifier used as the key in payload JSON. Keep it short, e.g. groupName, members.">Key</label>
           <input type="text" data-field="key" data-idx="${idx}" value="${esc(cfg.key)}">
         </div>
         <div>
-          <label title="Friendly name shown in the UI and console logs. Does not affect field matching on the page.">Display Name</label>
+          <label title="Friendly name shown in the UI and console logs. For buttons: the visible button text to find and click.">Display Name</label>
           <input type="text" data-field="displayName" data-idx="${idx}" value="${esc(cfg.displayName)}">
         </div>
         <div class="full-width" style="${cfg.fieldType === "button" ? "display:none" : ""}">
-          <label title="Text to match against <label> elements on the ServiceNow page. Can be the full label or a unique partial fragment. Multiple values are comma-separated — any match wins.">Label Match <small>(full label or partial text, comma-separated)</small></label>
+          <label title="Text to match against visible elements on the ServiceNow page. For expand: matches link/toggle text. Can be the full label or a unique partial fragment. Multiple values are comma-separated — any match wins.">Label Match <small>(full label or partial text, comma-separated)</small></label>
           <input type="text" data-field="labelMatch" data-idx="${idx}" value="${esc((cfg.labelMatch || []).join(", "))}">
         </div>
         <div>
-          <label title="Typeahead: dropdowns that search as you type. Text: plain input/textarea. Choice: native HTML select. Button: finds and clicks a button by its visible text.">Field Type</label>
+          <label title="Typeahead: dropdowns that search as you type. Text: plain input/textarea. Choice: native HTML select. Button: finds and clicks a button by its visible text. Expand: clicks an expandable section/toggle to reveal hidden fields.">Field Type</label>
           <select data-field="fieldType" data-idx="${idx}">
             <option value="typeahead" ${cfg.fieldType === "typeahead" ? "selected" : ""}>Typeahead</option>
             <option value="text" ${cfg.fieldType === "text" ? "selected" : ""}>Text</option>
             <option value="choice" ${cfg.fieldType === "choice" ? "selected" : ""}>Choice (native select)</option>
             <option value="button" ${cfg.fieldType === "button" ? "selected" : ""}>Button (click)</option>
+            <option value="expand" ${cfg.fieldType === "expand" ? "selected" : ""}>Expand (toggle section)</option>
           </select>
         </div>
-        <div class="timeout-field" style="${(cfg.fieldType === "text" || cfg.fieldType === "button") ? "display:none" : ""}">
+        <div class="timeout-field" style="${(cfg.fieldType === "text" || cfg.fieldType === "button" || cfg.fieldType === "expand") ? "display:none" : ""}">
           <label title="How long (ms) to wait after typing for AJAX search results to load. Slow fields like member lookup may need 5000–10000ms. Max: 60000ms.">Search Wait <small>(ms, max 60s)</small></label>
           <input type="number" data-field="ajaxWait" data-idx="${idx}" value="${cfg.ajaxWait || 1500}" min="500" max="60000" step="500">
         </div>
-        <div class="timeout-field" style="${(cfg.fieldType === "text" || cfg.fieldType === "button") ? "display:none" : ""}">
+        <div class="timeout-field" style="${(cfg.fieldType === "text" || cfg.fieldType === "button" || cfg.fieldType === "expand") ? "display:none" : ""}">
           <label title="After the search wait, how many times to poll for dropdown items (~400ms each). More retries = more time for slow-rendering results. e.g. 15 retries ≈ 6s of polling.">Dropdown Retries</label>
           <input type="number" data-field="dropdownRetries" data-idx="${idx}" value="${cfg.dropdownRetries || 15}" min="1" step="1">
+        </div>
+        <div class="button-wait-field" style="${(cfg.fieldType !== "button" && cfg.fieldType !== "expand") ? "display:none" : ""}">
+          <label title="What to do after clicking the button. No wait: proceed immediately. Fixed wait: sleep for specified ms. Smart wait: wait for next field's label to appear. URL change: wait for page URL to change.">Wait After Click</label>
+          <select data-field="buttonWait" data-idx="${idx}">
+            <option value="no_wait" ${cfg.buttonWait === "no_wait" ? "selected" : ""}>No wait</option>
+            <option value="fixed_wait" ${cfg.buttonWait === "fixed_wait" ? "selected" : ""}>Fixed wait</option>
+            <option value="smart_wait" ${(cfg.buttonWait === "smart_wait" || !cfg.buttonWait) ? "selected" : ""}>Smart wait (next field)</option>
+            <option value="url_change" ${cfg.buttonWait === "url_change" ? "selected" : ""}>Wait for URL change</option>
+          </select>
+        </div>
+        <div class="button-wait-field" style="${((cfg.fieldType !== "button" && cfg.fieldType !== "expand") || (cfg.buttonWait !== "fixed_wait")) ? "display:none" : ""}">
+          <label title="How long (ms) to wait after clicking the button.">Wait Duration <small>(ms)</small></label>
+          <input type="number" data-field="buttonWaitMs" data-idx="${idx}" value="${cfg.buttonWaitMs || 3000}" min="500" max="60000" step="500">
+        </div>
+        <div class="full-width default-value-field" style="${(cfg.fieldType === "expand" || cfg.fieldType === "button") ? "display:none" : ""}">
+          <label title="Pre-filled value used when no payload value is provided. Also used as placeholder in exported JSON.">Default Value</label>
+          <input type="text" data-field="defaultValue" data-idx="${idx}" value="${esc(cfg.defaultValue || "")}">
         </div>
         <div class="full-width field-footer">
           <label class="toggle-label">
@@ -396,18 +537,22 @@ function handleFieldChange(e) {
     fieldConfigs[idx].dropdownRetries = parseInt(el.value, 10) || 15;
   } else if (field === "fieldType") {
     fieldConfigs[idx].fieldType = el.value;
+    renderFieldList();
+    renderPayloadForm();
+  } else if (field === "buttonWait") {
+    fieldConfigs[idx].buttonWait = el.value;
     const item = el.closest(".field-item");
     if (item) {
-      const timeoutFields = item.querySelectorAll(".timeout-field");
-      const hideTimeout = el.value === "text" || el.value === "button";
-      timeoutFields.forEach((tf) => { tf.style.display = hideTimeout ? "none" : ""; });
-      const labelMatchField = item.querySelector("[data-field='labelMatch']");
-      if (labelMatchField) {
-        const lmRow = labelMatchField.closest(".full-width");
-        if (lmRow) lmRow.style.display = el.value === "button" ? "none" : "";
+      const waitMsField = item.querySelector("[data-field='buttonWaitMs']");
+      if (waitMsField) {
+        waitMsField.closest(".button-wait-field").style.display = el.value === "fixed_wait" ? "" : "none";
       }
     }
-    renderPayloadForm();
+  } else if (field === "buttonWaitMs") {
+    let val = parseInt(el.value, 10) || 3000;
+    if (val > 60000) { val = 60000; el.value = 60000; }
+    if (val < 500) { val = 500; el.value = 500; }
+    fieldConfigs[idx].buttonWaitMs = val;
   } else {
     const oldKey = fieldConfigs[idx][field];
     fieldConfigs[idx][field] = el.value;
@@ -483,13 +628,7 @@ function exportFields() {
 function exportPayload() {
   const payload = readPayloadFromForm();
   const enabledConfigs = fieldConfigs.filter((f) => f.enabled !== false);
-
-  const data = enabledConfigs.map((cfg) => ({
-    key: cfg.key,
-    value: payload[cfg.key] ?? ""
-  }));
-
-  const exportData = { configuration: enabledConfigs, data };
+  const exportData = { configuration: enabledConfigs, data: [payload] };
   const name = document.getElementById("templateNameInput").value.trim() || "payload";
   const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -529,9 +668,293 @@ function persistTemplates() {
   chrome.storage.sync.set({ [STORAGE_KEYS.TEMPLATES]: templates });
 }
 
+function persistFlows() {
+  chrome.storage.sync.set({ [STORAGE_KEYS.FLOWS]: flows });
+}
+
 function persistDomain() {
   const domain = document.getElementById("domain").value.trim();
   chrome.storage.sync.set({ [STORAGE_KEYS.DOMAIN]: domain });
+}
+
+// ── Flow sidebar ─────────────────────────────────────────────────
+
+function renderFlowList() {
+  const container = document.getElementById("flowList");
+  container.innerHTML = "";
+
+  if (flows.length === 0) {
+    container.innerHTML = '<div class="template-list-empty">No flows yet.<br>Click <strong>+ New</strong> to create one.</div>';
+    return;
+  }
+
+  flows.forEach((flow, idx) => {
+    const tplCount = (flow.templateIds || []).length;
+    const isActive = activeFlowId === flow.id;
+
+    const item = document.createElement("div");
+    item.className = "tpl-item" + (isActive ? " active" : "");
+    item.dataset.flowIdx = idx;
+    item.innerHTML = `
+      <div class="tpl-item-info">
+        <span class="tpl-item-name">${esc(flow.name)}</span>
+        <span class="tpl-item-meta">${tplCount} template(s)</span>
+      </div>
+    `;
+    container.appendChild(item);
+  });
+}
+
+function handleFlowSidebarClick(e) {
+  const item = e.target.closest(".tpl-item");
+  if (item && item.dataset.flowIdx !== undefined) {
+    const idx = parseInt(item.dataset.flowIdx, 10);
+    loadFlow(flows[idx]);
+  }
+}
+
+// ── Flow editor ──────────────────────────────────────────────────
+
+function startNewFlow() {
+  activeFlowId = null;
+  activeTemplateId = null;
+  flowTemplateIds = [];
+
+  document.getElementById("flowNameInput").value = "";
+  document.getElementById("flowStartUrl").value = "";
+  renderFlowTemplateList();
+  renderTemplateList();
+  renderFlowList();
+  showFlowEditor();
+
+  document.getElementById("flowNameInput").focus();
+}
+
+function loadFlow(flow) {
+  activeFlowId = flow.id;
+  activeTemplateId = null;
+  flowTemplateIds = [...(flow.templateIds || [])];
+
+  document.getElementById("flowNameInput").value = flow.name || "";
+  document.getElementById("flowStartUrl").value = flow.startUrl || "";
+  renderFlowTemplateList();
+  renderTemplateList();
+  renderFlowList();
+  showFlowEditor();
+}
+
+function handleSaveFlow() {
+  const name = document.getElementById("flowNameInput").value.trim();
+  if (!name) { alert("Enter a flow name."); document.getElementById("flowNameInput").focus(); return; }
+
+  const newFlow = {
+    id: "flow_" + Date.now(),
+    name,
+    templateIds: [...flowTemplateIds],
+    startUrl: document.getElementById("flowStartUrl").value.trim(),
+  };
+
+  flows.push(newFlow);
+  activeFlowId = newFlow.id;
+  persistFlows();
+  renderFlowList();
+  updateActionButtons();
+  showToast(`Flow "${name}" saved.`);
+}
+
+function handleUpdateFlow() {
+  const flow = flows.find((f) => f.id === activeFlowId);
+  if (!flow) return;
+
+  const name = document.getElementById("flowNameInput").value.trim();
+  if (!name) { alert("Flow name cannot be empty."); return; }
+
+  flow.name = name;
+  flow.templateIds = [...flowTemplateIds];
+  flow.startUrl = document.getElementById("flowStartUrl").value.trim();
+
+  persistFlows();
+  renderFlowList();
+  showToast(`Flow "${name}" updated.`);
+}
+
+function handleDeleteFlow() {
+  const flow = flows.find((f) => f.id === activeFlowId);
+  if (!flow) return;
+  if (!confirm(`Delete flow "${flow.name}"?`)) return;
+
+  flows = flows.filter((f) => f.id !== activeFlowId);
+  activeFlowId = null;
+  persistFlows();
+  renderFlowList();
+  showEmptyState();
+  showToast("Flow deleted.");
+}
+
+function exportFlow() {
+  const startUrl = document.getElementById("flowStartUrl").value.trim();
+  const mergedConfigs = [];
+
+  for (const tplId of flowTemplateIds) {
+    const tpl = templates.find((t) => t.id === tplId);
+    if (tpl && tpl.fieldConfigs) {
+      const enabled = tpl.fieldConfigs.filter((f) => f.enabled !== false);
+      mergedConfigs.push(...enabled);
+    }
+  }
+
+  // Build a placeholder data item with only user-input fields (skip button/expand actions)
+  const placeholder = {};
+  for (const cfg of mergedConfigs) {
+    if (cfg.fieldType === "button" || cfg.fieldType === "expand") continue;
+    placeholder[cfg.key] = cfg.defaultValue || "";
+  }
+
+  const exportData = {
+    configuration: mergedConfigs,
+    startUrl: startUrl || undefined,
+    data: [placeholder],
+  };
+
+  const name = document.getElementById("flowNameInput").value.trim() || "flow";
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name.replace(/\s+/g, "-").toLowerCase() + "-flow.json";
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast("Flow JSON exported.");
+}
+
+// ── Flow template list rendering ─────────────────────────────────
+
+function renderFlowTemplateList() {
+  const container = document.getElementById("flowTemplateList");
+  const emptyMsg = document.getElementById("flowTemplateEmpty");
+  container.innerHTML = "";
+
+  if (flowTemplateIds.length === 0) {
+    container.classList.add("hidden");
+    emptyMsg.classList.remove("hidden");
+    return;
+  }
+
+  container.classList.remove("hidden");
+  emptyMsg.classList.add("hidden");
+
+  flowTemplateIds.forEach((tplId, idx) => {
+    const tpl = templates.find((t) => t.id === tplId);
+    const name = tpl ? tpl.name : "(deleted template)";
+    const fieldCount = tpl ? (tpl.fieldConfigs || []).length : 0;
+
+    const item = document.createElement("div");
+    item.className = "flow-tpl-item";
+    const nameHtml = tpl
+      ? `<a href="#" class="flow-tpl-link" data-tpl-id="${tplId}" title="Open template definition">${esc(name)}</a>`
+      : `<span class="flow-tpl-deleted">${esc(name)}</span>`;
+
+    item.innerHTML = `
+      <div class="flow-tpl-arrows">
+        <button data-flow-dir="up" data-flow-idx="${idx}" title="Move up">&uarr;</button>
+        <button data-flow-dir="down" data-flow-idx="${idx}" title="Move down">&darr;</button>
+      </div>
+      <span class="flow-tpl-name">${nameHtml}</span>
+      <span class="flow-tpl-meta">${fieldCount} field(s)</span>
+      <button class="btn btn-sm btn-danger" data-flow-action="remove" data-flow-idx="${idx}">Remove</button>
+    `;
+    container.appendChild(item);
+  });
+}
+
+function handleFlowTemplateAction(e) {
+  const link = e.target.closest(".flow-tpl-link");
+  if (link) {
+    e.preventDefault();
+    const tplId = link.dataset.tplId;
+    const tpl = templates.find((t) => t.id === tplId);
+    if (tpl) loadTemplate(tpl);
+    return;
+  }
+
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  const idx = parseInt(btn.dataset.flowIdx, 10);
+  if (isNaN(idx)) return;
+
+  if (btn.dataset.flowDir === "up" && idx > 0) {
+    [flowTemplateIds[idx - 1], flowTemplateIds[idx]] = [flowTemplateIds[idx], flowTemplateIds[idx - 1]];
+    renderFlowTemplateList();
+    scheduleFlowAutoSave();
+  } else if (btn.dataset.flowDir === "down" && idx < flowTemplateIds.length - 1) {
+    [flowTemplateIds[idx], flowTemplateIds[idx + 1]] = [flowTemplateIds[idx + 1], flowTemplateIds[idx]];
+    renderFlowTemplateList();
+    scheduleFlowAutoSave();
+  } else if (btn.dataset.flowAction === "remove") {
+    flowTemplateIds.splice(idx, 1);
+    renderFlowTemplateList();
+    scheduleFlowAutoSave();
+  }
+}
+
+function addFlowTemplate() {
+  if (templates.length === 0) {
+    alert("No templates available. Create a template first.");
+    return;
+  }
+
+  const options = templates.map((t) => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join("");
+  const dialog = document.createElement("div");
+  dialog.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;z-index:200;";
+  dialog.innerHTML = `
+    <div style="background:#fff;border-radius:10px;padding:24px;min-width:320px;box-shadow:0 8px 30px rgba(0,0,0,0.2);">
+      <h3 style="margin-bottom:12px;font-size:15px;">Add Template to Flow</h3>
+      <select id="flowTplPicker" style="width:100%;padding:8px 10px;font-size:14px;border:1px solid #cbd5e1;border-radius:6px;margin-bottom:16px;">
+        ${options}
+      </select>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button id="flowTplCancel" class="btn btn-sm">Cancel</button>
+        <button id="flowTplAdd" class="btn btn-primary btn-sm">Add</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(dialog);
+
+  dialog.querySelector("#flowTplCancel").addEventListener("click", () => dialog.remove());
+  dialog.querySelector("#flowTplAdd").addEventListener("click", () => {
+    const selected = dialog.querySelector("#flowTplPicker").value;
+    if (selected) {
+      flowTemplateIds.push(selected);
+      renderFlowTemplateList();
+      scheduleFlowAutoSave();
+    }
+    dialog.remove();
+  });
+}
+
+// ── Flow auto-save ───────────────────────────────────────────────
+
+let _flowAutoSaveTimer = null;
+
+function scheduleFlowAutoSave() {
+  if (activeFlowId === null) return;
+  clearTimeout(_flowAutoSaveTimer);
+  _flowAutoSaveTimer = setTimeout(autoSaveFlow, 800);
+}
+
+function autoSaveFlow() {
+  if (activeFlowId === null) return;
+  const flow = flows.find((f) => f.id === activeFlowId);
+  if (!flow) return;
+
+  const name = document.getElementById("flowNameInput").value.trim();
+  if (name) flow.name = name;
+  flow.templateIds = [...flowTemplateIds];
+  flow.startUrl = document.getElementById("flowStartUrl").value.trim();
+
+  persistFlows();
+  renderFlowList();
+  showToast("Flow auto-saved.");
 }
 
 // ── Utilities ────────────────────────────────────────────────────

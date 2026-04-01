@@ -206,3 +206,50 @@ h2 {
 .dot-warn { background: #f59e0b; }
 .dot-wait { background: #f59e0b; }
 
+/* ── Flow mode ──────────────────────────────────── */
+
+#flowSelect {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  margin-bottom: 8px;
+}
+
+.flow-data-upload {
+  margin-top: 4px;
+}
+
+/* ── Progress display ───────────────────────────── */
+
+.progress-display {
+  margin: 8px 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.progress-bar-container {
+  flex: 1;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background: #3b82f6;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  white-space: nowrap;
+}
+
