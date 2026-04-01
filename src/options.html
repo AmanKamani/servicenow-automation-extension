@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SN Group Join — Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <header class="top-bar">
+    <h1>ServiceNow Group Join Automator</h1>
+    <div class="top-bar-right">
+      <a id="reloadExtLink" href="#" class="reload-ext-link" title="Open Chrome extensions page to reload">Reload Extension</a>
+      <label class="domain-label">Domain</label>
+      <input type="text" id="domain" class="domain-input" placeholder="mycompany.service-now.com">
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <!-- ─── Column 1: Template sidebar ─── -->
+    <aside class="panel panel-sidebar">
+      <div class="panel-header">
+        <h2>Templates</h2>
+        <button id="newTemplateBtn" class="btn btn-primary btn-sm">+ New</button>
+      </div>
+      <div id="templateList" class="template-list"></div>
+    </aside>
+
+    <!-- ─── Column 2: Editor ─── -->
+    <main class="panel panel-editor">
+      <!-- Empty state shown when nothing is selected -->
+      <div id="emptyState" class="empty-state">
+        <div class="empty-icon">&#9776;</div>
+        <p>Select a template from the left, or click <strong>+ New</strong> to create one.</p>
+      </div>
+
+      <!-- Editor content (hidden until a template is selected/created) -->
+      <div id="editorContent" class="editor-content hidden">
+        <div class="editor-top">
+          <input type="text" id="templateNameInput" class="template-name-input" placeholder="Template name">
+          <span id="editingBadge" class="badge badge-editing hidden">Editing</span>
+          <span id="newBadge" class="badge badge-new hidden">New</span>
+        </div>
+
+        <!-- Payload values (generated dynamically from field configs) -->
+        <section class="editor-section">
+          <div class="section-header">
+            <h3>Payload Values</h3>
+            <button id="exportPayloadBtn" class="btn btn-sm">Export JSON</button>
+          </div>
+          <p class="hint">One input per configured field. Export as JSON to use with "Upload JSON" in the popup.</p>
+          <div id="payloadForm" class="payload-form"></div>
+          <div id="payloadEmpty" class="payload-empty">
+            No fields configured yet. Add fields below to see payload inputs here.
+          </div>
+        </section>
+
+        <!-- Field configuration -->
+        <section class="editor-section">
+          <div class="section-header">
+            <h3>Field Configuration</h3>
+            <div class="field-toolbar">
+              <button id="addFieldBtn" class="btn btn-sm">+ Add Field</button>
+              <button id="resetFieldsBtn" class="btn btn-sm btn-muted">Reset Defaults</button>
+              <label class="import-label btn btn-sm">
+                Import
+                <input type="file" id="importFieldsFile" accept=".json" hidden>
+              </label>
+              <button id="exportFieldsBtn" class="btn btn-sm">Export</button>
+            </div>
+          </div>
+          <p class="hint">Fields are filled in order. Only enabled fields are processed.</p>
+          <details class="field-help">
+            <summary>What are Search Wait &amp; Dropdown Retries?</summary>
+            <div class="field-help-body">
+              <p><strong>Search Wait</strong> — After typing into a dropdown, ServiceNow makes an AJAX call to search. This is how long (in ms) to wait for results to appear. Slow fields (like member lookup) may need 5000–10000ms. Max: 60 seconds.</p>
+              <p><strong>Dropdown Retries</strong> — After the search wait, the extension polls for dropdown items to click. Each retry waits ~400ms. If results are slow to render, increase this. e.g. 15 retries = ~6s of polling after the initial wait.</p>
+              <p class="field-help-example">Total max wait = Search Wait + (Retries × 400ms)<br>e.g. 10000ms wait + 30 retries = 10s + 12s = 22s total</p>
+            </div>
+          </details>
+          <div id="fieldList" class="field-list"></div>
+          <div class="field-toolbar field-toolbar-bottom">
+            <button id="addFieldBtnBottom" class="btn btn-sm">+ Add Field</button>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <!-- ─── Column 3: Actions ─── -->
+    <aside class="panel panel-actions">
+      <div id="actionButtons" class="action-buttons">
+        <button id="saveNewBtn" class="btn btn-primary btn-block hidden">Save Template</button>
+        <button id="updateBtn" class="btn btn-primary btn-block hidden">Update Template</button>
+        <button id="duplicateBtn" class="btn btn-block hidden">Duplicate</button>
+        <button id="deleteCurrentBtn" class="btn btn-danger btn-block hidden">Delete Template</button>
+      </div>
+      <div class="action-divider"></div>
+      <div class="action-info">
+        <h4>How It Works</h4>
+        <ol class="how-list">
+          <li>Create or select a template</li>
+          <li>Fill payload values &amp; configure fields</li>
+          <li>Open ServiceNow, click popup, choose template, run</li>
+        </ol>
+      </div>
+    </aside>
+
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="storage-defaults.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

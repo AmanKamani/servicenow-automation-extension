@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SN Group Join</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Group Join Automator</h1>
+
+    <!-- Input Mode Selector -->
+    <section class="mode-section">
+      <div class="mode-tabs">
+        <button class="mode-tab active" data-mode="upload">Upload JSON</button>
+        <button class="mode-tab" data-mode="template">Template</button>
+      </div>
+    </section>
+
+    <!-- Upload mode -->
+    <section id="modeUpload" class="mode-panel">
+      <label for="jsonFile" class="file-label">
+        <span id="fileNameDisplay">Choose JSON file...</span>
+        <input type="file" id="jsonFile" accept=".json,application/json">
+      </label>
+    </section>
+
+    <!-- Template mode -->
+    <section id="modeTemplate" class="mode-panel hidden">
+      <select id="templateSelect">
+        <option value="">Select a template...</option>
+      </select>
+    </section>
+
+    <div id="preview" class="preview hidden"></div>
+
+    <section class="actions">
+      <button id="runBtn" class="btn btn-primary" disabled>Run Automation</button>
+      <button id="stopBtn" class="btn btn-stop hidden">Stop</button>
+    </section>
+
+    <section id="statusLog" class="status-log">
+      <h2>Status</h2>
+      <ul id="logList"></ul>
+    </section>
+
+  </div>
+
+  <script src="storage-defaults.js"></script>
+  <script src="schema.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
