@@ -142,6 +142,10 @@ servicenow-group-join-extension/
     └── options.css          # Options styles
 ```
 
+## Upcoming Features
+
+See [docs/upcomingFeatures.md](docs/upcomingFeatures.md) for planned features and detailed design documents.
+
 ## Troubleshooting
 
 - **"No active tab found"** — Make sure the ServiceNow page is the focused tab.
