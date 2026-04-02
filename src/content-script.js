@@ -597,7 +597,20 @@
     el.focus();
     el.click();
     await sleep(100);
-    document.execCommand("insertText", false, value);
+
+    if (document.activeElement === el) {
+      document.execCommand("insertText", false, value);
+    }
+
+    if (el.value !== value) {
+      const setter = Object.getOwnPropertyDescriptor(
+        Object.getPrototypeOf(el),
+        "value",
+      )?.set;
+      if (setter) setter.call(el, value);
+      else el.value = value;
+    }
+
     el.dispatchEvent(new Event("input", { bubbles: true }));
     el.dispatchEvent(new Event("change", { bubbles: true }));
     await sleep(100);
@@ -610,10 +623,12 @@
 
   async function clearField(el) {
     el.focus(); el.click(); await sleep(50);
-    el.dispatchEvent(new KeyboardEvent("keydown", { key: "a", code: "KeyA", ctrlKey: true, metaKey: true, bubbles: true }));
-    document.execCommand("selectAll");
-    document.execCommand("delete");
-    await sleep(50);
+    if (document.activeElement === el) {
+      el.dispatchEvent(new KeyboardEvent("keydown", { key: "a", code: "KeyA", ctrlKey: true, metaKey: true, bubbles: true }));
+      document.execCommand("selectAll");
+      document.execCommand("delete");
+      await sleep(50);
+    }
     if ("value" in el) {
       const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), "value")?.set;
       if (setter) setter.call(el, ""); else el.value = "";
