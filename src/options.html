@@ -22,13 +22,25 @@
     <aside class="panel panel-sidebar">
       <div class="panel-header">
         <h2 data-section-icon="templates">Templates</h2>
-        <button id="newTemplateBtn" class="btn btn-primary btn-sm">+ New</button>
+        <div class="panel-header-actions">
+          <label class="btn btn-sm" id="importTemplateLabelBtn">
+            Import
+            <input type="file" id="importTemplateFile" accept=".json" hidden>
+          </label>
+          <button id="newTemplateBtn" class="btn btn-primary btn-sm">+ New</button>
+        </div>
       </div>
       <div id="templateList" class="template-list"></div>
       <div class="sidebar-divider"></div>
       <div class="panel-header">
         <h2 data-section-icon="flows">Flows</h2>
-        <button id="newFlowBtn" class="btn btn-primary btn-sm">+ New</button>
+        <div class="panel-header-actions">
+          <label class="btn btn-sm" id="importFlowLabelBtn">
+            Import
+            <input type="file" id="importFlowFile" accept=".json" hidden>
+          </label>
+          <button id="newFlowBtn" class="btn btn-primary btn-sm">+ New</button>
+        </div>
       </div>
       <div id="flowList" class="template-list"></div>
     </aside>
@@ -47,13 +59,14 @@
           <input type="text" id="templateNameInput" class="template-name-input" placeholder="Template name">
           <span id="editingBadge" class="badge badge-editing hidden">Editing</span>
           <span id="newBadge" class="badge badge-new hidden">New</span>
+          <span id="templateKeyDisplay" class="editor-key-display hidden"></span>
         </div>
 
         <!-- Payload values (generated dynamically from field configs) -->
         <section class="editor-section">
           <div class="section-header">
             <h3 data-section-icon="payload">Payload Values</h3>
-            <button id="exportPayloadBtn" class="btn btn-sm">Export JSON</button>
+            <button id="exportPayloadBtn" class="btn btn-sm">Export Runtime JSON</button>
           </div>
           <p class="hint">One input per configured field. Export as JSON to use with "Upload JSON" in the popup.</p>
           <div id="payloadForm" class="payload-form"></div>
@@ -69,11 +82,6 @@
             <div class="field-toolbar">
               <button id="addFieldBtn" class="btn btn-sm">+ Add Field</button>
               <button id="resetFieldsBtn" class="btn btn-sm btn-muted">Reset Defaults</button>
-              <label class="import-label btn btn-sm">
-                Import
-                <input type="file" id="importFieldsFile" accept=".json" hidden>
-              </label>
-              <button id="exportFieldsBtn" class="btn btn-sm">Export</button>
             </div>
           </div>
           <p class="hint">Fields are filled in order. Only enabled fields are processed.</p>
@@ -98,6 +106,7 @@
           <input type="text" id="flowNameInput" class="template-name-input" placeholder="Flow name">
           <span id="flowEditingBadge" class="badge badge-editing hidden">Editing</span>
           <span id="flowNewBadge" class="badge badge-new hidden">New</span>
+          <span id="flowKeyDisplay" class="editor-key-display hidden"></span>
         </div>
 
         <section class="editor-section">
@@ -153,17 +162,46 @@
         <button id="deleteCurrentBtn" class="btn btn-danger btn-block hidden">Delete Template</button>
         <button id="saveFlowBtn" class="btn btn-primary btn-block hidden">Save Flow</button>
         <button id="updateFlowBtn" class="btn btn-primary btn-block hidden">Update Flow</button>
-        <button id="exportFlowBtn" class="btn btn-block hidden">Export Flow JSON</button>
+        <button id="exportFlowBtn" class="btn btn-block hidden">Export Runtime JSON</button>
         <button id="deleteFlowBtn" class="btn btn-danger btn-block hidden">Delete Flow</button>
+
+        <div class="action-divider"></div>
+        <h4 class="action-group-title hidden" id="shareGroupTitle">Share</h4>
+
+        <!-- Template share buttons -->
+        <button id="shareTemplateBtn" class="btn btn-block hidden">Share Template</button>
+        <button id="dataTemplateBtn" class="btn btn-block hidden">Download Data Template</button>
+
+        <!-- Flow share buttons -->
+        <button id="shareFlowBtn" class="btn btn-block hidden">Share Flow</button>
+        <button id="flowDataTemplateBtn" class="btn btn-block hidden">Download Data Template</button>
       </div>
       <div class="action-divider"></div>
       <div id="howItWorks" class="action-info"></div>
+      <div class="version-info">
+        <span id="versionDisplay"></span>
+      </div>
     </aside>
 
   </div>
 
   <div id="toast" class="toast"></div>
 
+  <!-- Import conflict modal -->
+  <div id="importConflictModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h3 id="conflictTitle"></h3>
+      <p id="conflictMessage"></p>
+      <div class="modal-actions">
+        <button id="conflictCreateNew" class="btn btn-primary">Create New Copy</button>
+        <button id="conflictReplace" class="btn btn-warning">Replace Existing</button>
+        <button id="conflictAttach" class="btn btn-info hidden">Attach to Existing</button>
+        <button id="conflictCancel" class="btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="export-import.js"></script>
   <script src="section-icons.js"></script>
   <script src="storage-defaults.js"></script>
   <script src="options.js"></script>

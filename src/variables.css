@@ -133,6 +133,23 @@
   --sn-font-icon: 48px;
   --sn-font-badge: 12px;
 
+  /* ── Modal ────────────────────────────────────────────── */
+  --sn-modal-bg: var(--sn-bg-surface);
+  --sn-modal-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  --sn-modal-radius: 12px;
+  --sn-modal-title-color: var(--sn-text-heading);
+  --sn-modal-text-color: var(--sn-text-secondary);
+
+  /* ── Warning button ─────────────────────────────────── */
+  --sn-warning-btn-bg: var(--sn-warning);
+  --sn-warning-btn-hover: #d97706;
+  --sn-warning-btn-text: #fff;
+
+  /* ── Info button ──────────────────────────────────── */
+  --sn-info-btn-bg: var(--sn-info);
+  --sn-info-btn-hover: #0284c7;
+  --sn-info-btn-text: #fff;
+
   /* ── Shadows / glows ─────────────────────────────────── */
   --sn-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.1);
   --sn-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.15);

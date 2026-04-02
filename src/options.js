@@ -49,8 +49,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("addFieldBtn").addEventListener("click", addField);
   document.getElementById("addFieldBtnBottom").addEventListener("click", addField);
   document.getElementById("resetFieldsBtn").addEventListener("click", resetFields);
-  document.getElementById("importFieldsFile").addEventListener("change", importFields);
-  document.getElementById("exportFieldsBtn").addEventListener("click", exportFields);
   document.getElementById("exportPayloadBtn").addEventListener("click", exportPayload);
   document.getElementById("templateNameInput").addEventListener("input", scheduleAutoSave);
 
@@ -69,6 +67,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     scheduleFlowAutoSave();
   });
   document.getElementById("flowRetryFallback").addEventListener("change", scheduleFlowAutoSave);
+
+  // Wire share/import buttons
+  document.getElementById("shareTemplateBtn").addEventListener("click", handleShareTemplate);
+  document.getElementById("importTemplateFile").addEventListener("change", handleImportTemplate);
+  document.getElementById("dataTemplateBtn").addEventListener("click", handleDataTemplate);
+  document.getElementById("shareFlowBtn").addEventListener("click", handleShareFlow);
+  document.getElementById("importFlowFile").addEventListener("change", handleImportFlow);
+  document.getElementById("flowDataTemplateBtn").addEventListener("click", handleFlowDataTemplate);
+
+  // Version display
+  document.getElementById("versionDisplay").textContent =
+    `Extension v${getExtensionVersion()} \u00b7 Config v${CONFIG_VERSION}`;
 
   document.getElementById("domain").addEventListener("change", persistDomain);
   document.getElementById("reloadExtLink").addEventListener("click", (e) => {
@@ -112,10 +122,12 @@ function renderTemplateList() {
     const item = document.createElement("div");
     item.className = "tpl-item" + (isActive ? " active" : "");
     item.dataset.tplIdx = idx;
+    const keyHtml = tpl.key ? `<span class="tpl-item-key" title="${esc(tpl.key)}">${esc(tpl.key)}</span>` : "";
     item.innerHTML = `
       <div class="tpl-item-info">
         <span class="tpl-item-name">${esc(tpl.name)}</span>
         <span class="tpl-item-meta">${fieldCount} field(s)</span>
+        ${keyHtml}
       </div>
     `;
     container.appendChild(item);
@@ -175,12 +187,23 @@ function updateActionButtons() {
   // Flow buttons
   document.getElementById("saveFlowBtn").classList.toggle("hidden", !isFlow || !flowIsNew);
   document.getElementById("updateFlowBtn").classList.toggle("hidden", !isFlow || flowIsNew);
-  document.getElementById("exportFlowBtn").classList.toggle("hidden", !isFlow);
+  document.getElementById("exportFlowBtn").classList.toggle("hidden", !isFlow || flowIsNew);
   document.getElementById("deleteFlowBtn").classList.toggle("hidden", !isFlow || flowIsNew);
 
   // Flow badges
   document.getElementById("flowEditingBadge").classList.toggle("hidden", !isFlow || flowIsNew);
   document.getElementById("flowNewBadge").classList.toggle("hidden", !isFlow || !flowIsNew);
+
+  // Share group title
+  document.getElementById("shareGroupTitle").classList.toggle("hidden", !isTpl && !isFlow);
+
+  // Template share buttons: share/data require a saved template
+  document.getElementById("shareTemplateBtn").classList.toggle("hidden", !isTpl || tplIsNew);
+  document.getElementById("dataTemplateBtn").classList.toggle("hidden", !isTpl || tplIsNew);
+
+  // Flow share buttons: share/data require a saved flow
+  document.getElementById("shareFlowBtn").classList.toggle("hidden", !isFlow || flowIsNew);
+  document.getElementById("flowDataTemplateBtn").classList.toggle("hidden", !isFlow || flowIsNew);
 
   updateHowItWorks();
 }
@@ -233,6 +256,9 @@ function startNewTemplate() {
   payloadValues = {};
 
   document.getElementById("templateNameInput").value = "";
+  const keyEl = document.getElementById("templateKeyDisplay");
+  keyEl.textContent = "";
+  keyEl.classList.add("hidden");
   renderFieldList();
   renderPayloadForm();
   renderTemplateList();
@@ -249,6 +275,14 @@ function loadTemplate(tpl) {
   activeFlowId = null;
 
   document.getElementById("templateNameInput").value = tpl.name || "";
+  const keyEl = document.getElementById("templateKeyDisplay");
+  if (tpl.key) {
+    keyEl.textContent = tpl.key;
+    keyEl.classList.remove("hidden");
+  } else {
+    keyEl.textContent = "";
+    keyEl.classList.add("hidden");
+  }
   fieldConfigs = JSON.parse(JSON.stringify(tpl.fieldConfigs || []));
   payloadValues = JSON.parse(JSON.stringify(tpl.payload || {}));
 
@@ -267,6 +301,7 @@ function handleSaveNew() {
 
   const newTpl = {
     id: "tpl_" + Date.now(),
+    key: generateKey(name),
     name,
     payload: readPayloadFromForm(),
     fieldConfigs: JSON.parse(JSON.stringify(fieldConfigs)),
@@ -300,6 +335,7 @@ function handleDuplicate() {
   const name = document.getElementById("templateNameInput").value.trim() + " (copy)";
   const dup = {
     id: "tpl_" + Date.now(),
+    key: generateKey(name),
     name,
     payload: readPayloadFromForm(),
     fieldConfigs: JSON.parse(JSON.stringify(fieldConfigs)),
@@ -710,35 +746,6 @@ function resetFields() {
   }
 }
 
-function importFields(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const imported = JSON.parse(reader.result);
-      if (!Array.isArray(imported)) throw new Error("Must be an array.");
-      fieldConfigs = imported;
-      renderFieldList();
-      renderPayloadForm();
-    } catch (err) {
-      alert("Invalid field config JSON: " + err.message);
-    }
-  };
-  reader.readAsText(file);
-  e.target.value = "";
-}
-
-function exportFields() {
-  const blob = new Blob([JSON.stringify(fieldConfigs, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "field-configs.json";
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 function exportPayload() {
   const payload = readPayloadFromForm();
   const enabledConfigs = fieldConfigs.filter((f) => f.enabled !== false);
@@ -809,10 +816,12 @@ function renderFlowList() {
     const item = document.createElement("div");
     item.className = "tpl-item" + (isActive ? " active" : "");
     item.dataset.flowIdx = idx;
+    const keyHtml = flow.key ? `<span class="tpl-item-key" title="${esc(flow.key)}">${esc(flow.key)}</span>` : "";
     item.innerHTML = `
       <div class="tpl-item-info">
         <span class="tpl-item-name">${esc(flow.name)}</span>
         <span class="tpl-item-meta">${tplCount} template(s)</span>
+        ${keyHtml}
       </div>
     `;
     container.appendChild(item);
@@ -835,6 +844,9 @@ function startNewFlow() {
   flowTemplateIds = [];
 
   document.getElementById("flowNameInput").value = "";
+  const keyEl = document.getElementById("flowKeyDisplay");
+  keyEl.textContent = "";
+  keyEl.classList.add("hidden");
   document.getElementById("flowStartUrl").value = "";
   document.getElementById("flowAlwaysNavigate").checked = true;
   document.getElementById("flowOnError").value = "stop";
@@ -854,6 +866,14 @@ function loadFlow(flow) {
   flowTemplateIds = [...(flow.templateIds || [])];
 
   document.getElementById("flowNameInput").value = flow.name || "";
+  const keyEl = document.getElementById("flowKeyDisplay");
+  if (flow.key) {
+    keyEl.textContent = flow.key;
+    keyEl.classList.remove("hidden");
+  } else {
+    keyEl.textContent = "";
+    keyEl.classList.add("hidden");
+  }
   document.getElementById("flowStartUrl").value = flow.startUrl || "";
   document.getElementById("flowAlwaysNavigate").checked = flow.alwaysNavigate !== false;
   document.getElementById("flowOnError").value = flow.onError || "stop";
@@ -872,6 +892,7 @@ function handleSaveFlow() {
   const onError = document.getElementById("flowOnError").value;
   const newFlow = {
     id: "flow_" + Date.now(),
+    key: generateKey(name),
     name,
     templateIds: [...flowTemplateIds],
     startUrl: document.getElementById("flowStartUrl").value.trim(),
@@ -1093,6 +1114,254 @@ function autoSaveFlow() {
   persistFlows();
   renderFlowList();
   showToast("Flow auto-saved.");
+}
+
+// ── Share / Import handlers ───────────────────────────────────────
+
+function handleShareTemplate() {
+  const tpl = templates.find((t) => t.id === activeTemplateId);
+  if (!tpl) return;
+  const exportData = buildTemplateShareExport(tpl);
+  const filename = slugify(tpl.name) + ".share-template.json";
+  downloadJson(exportData, filename);
+  showToast("Template shared.");
+}
+
+async function handleImportTemplate(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  e.target.value = "";
+
+  const text = await file.text();
+  let parsed;
+  try {
+    parsed = parseShareImport(text);
+  } catch (err) {
+    showToast(err.message);
+    return;
+  }
+
+  if (parsed.exportType !== "template") {
+    showToast('This is a flow export. Use "Import Flow" instead.');
+    return;
+  }
+
+  const incoming = parsed.template;
+  const dup = findDuplicateTemplate(incoming.key, incoming.name, templates);
+
+  if (dup) {
+    const choice = await showImportConflictModal(incoming.name, "template");
+    if (choice === "cancel") return;
+    if (choice === "replace") {
+      dup.match.name = incoming.name;
+      dup.match.key = incoming.key || dup.match.key;
+      dup.match.fieldConfigs = JSON.parse(JSON.stringify(incoming.fieldConfigs));
+      dup.match.payload = {};
+      persistTemplates();
+      loadTemplate(dup.match);
+      showToast(`Template "${incoming.name}" replaced.`);
+      return;
+    }
+  }
+
+  const newName = dup ? copyName(incoming.name) : incoming.name;
+  const newTpl = {
+    id: "tpl_" + Date.now(),
+    key: generateKey(newName),
+    name: newName,
+    payload: {},
+    fieldConfigs: JSON.parse(JSON.stringify(incoming.fieldConfigs)),
+  };
+  templates.push(newTpl);
+  persistTemplates();
+  loadTemplate(newTpl);
+  showToast(`Template "${newName}" imported.`);
+}
+
+function handleDataTemplate() {
+  const tpl = templates.find((t) => t.id === activeTemplateId);
+  if (!tpl) return;
+  const enabledConfigs = (tpl.fieldConfigs || []).filter((f) => f.enabled !== false);
+  const dataTemplate = buildDataTemplate(enabledConfigs, tpl.name, "template");
+  const filename = slugify(tpl.name) + "-data-template.json";
+  downloadJson(dataTemplate, filename);
+  showToast("Data template downloaded.");
+}
+
+function handleShareFlow() {
+  const flow = flows.find((f) => f.id === activeFlowId);
+  if (!flow) return;
+
+  const resolvedTemplates = (flow.templateIds || [])
+    .map((id) => templates.find((t) => t.id === id))
+    .filter(Boolean);
+
+  const exportData = buildFlowShareExport(flow, resolvedTemplates);
+  const filename = slugify(flow.name) + ".share-flow.json";
+  downloadJson(exportData, filename);
+  showToast("Flow shared.");
+}
+
+async function handleImportFlow(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  e.target.value = "";
+
+  const text = await file.text();
+  let parsed;
+  try {
+    parsed = parseShareImport(text);
+  } catch (err) {
+    showToast(err.message);
+    return;
+  }
+
+  if (parsed.exportType !== "flow") {
+    showToast('This is a template export. Use "Import Template" instead.');
+    return;
+  }
+
+  const incomingFlow = parsed.flow;
+  let flowAction = "new";
+  let targetFlow = null;
+
+  const flowDup = findDuplicateFlow(incomingFlow.key, incomingFlow.name, flows);
+  if (flowDup) {
+    const choice = await showImportConflictModal(incomingFlow.name, "flow");
+    if (choice === "cancel") return;
+    flowAction = choice;
+    if (choice === "replace") targetFlow = flowDup.match;
+  }
+
+  const collectedTemplateIds = [];
+  for (const tplData of parsed.templates) {
+    const tplDup = findDuplicateTemplate(tplData.key, tplData.name, templates);
+
+    if (tplDup) {
+      const tplChoice = await showImportConflictModal(tplData.name, "template", { showAttach: true });
+      if (tplChoice === "cancel") {
+        showToast("Flow import cancelled.");
+        return;
+      }
+      if (tplChoice === "replace") {
+        tplDup.match.name = tplData.name;
+        tplDup.match.key = tplData.key || tplDup.match.key;
+        tplDup.match.fieldConfigs = JSON.parse(JSON.stringify(tplData.fieldConfigs));
+        tplDup.match.payload = {};
+        collectedTemplateIds.push(tplDup.match.id);
+      } else if (tplChoice === "attach") {
+        collectedTemplateIds.push(tplDup.match.id);
+      } else {
+        const newName = copyName(tplData.name);
+        const newTpl = {
+          id: "tpl_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+          key: generateKey(newName),
+          name: newName,
+          payload: {},
+          fieldConfigs: JSON.parse(JSON.stringify(tplData.fieldConfigs)),
+        };
+        templates.push(newTpl);
+        collectedTemplateIds.push(newTpl.id);
+      }
+    } else {
+      const newTpl = {
+        id: "tpl_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+        key: tplData.key || generateKey(tplData.name),
+        name: tplData.name,
+        payload: {},
+        fieldConfigs: JSON.parse(JSON.stringify(tplData.fieldConfigs)),
+      };
+      templates.push(newTpl);
+      collectedTemplateIds.push(newTpl.id);
+    }
+  }
+
+  if (flowAction === "replace" && targetFlow) {
+    targetFlow.name = incomingFlow.name;
+    targetFlow.key = incomingFlow.key || targetFlow.key;
+    targetFlow.startUrl = incomingFlow.startUrl || "";
+    targetFlow.alwaysNavigate = incomingFlow.alwaysNavigate !== false;
+    targetFlow.onError = incomingFlow.onError || "stop";
+    targetFlow.retryFallback = incomingFlow.retryFallback;
+    targetFlow.templateIds = collectedTemplateIds;
+    persistTemplates();
+    persistFlows();
+    loadFlow(targetFlow);
+    showToast(`Flow "${incomingFlow.name}" replaced with ${collectedTemplateIds.length} template(s).`);
+  } else {
+    const flowName = flowDup ? copyName(incomingFlow.name) : incomingFlow.name;
+    const newFlow = {
+      id: "flow_" + Date.now(),
+      key: generateKey(flowName),
+      name: flowName,
+      templateIds: collectedTemplateIds,
+      startUrl: incomingFlow.startUrl || "",
+      alwaysNavigate: incomingFlow.alwaysNavigate !== false,
+      onError: incomingFlow.onError || "stop",
+      retryFallback: incomingFlow.retryFallback,
+    };
+    flows.push(newFlow);
+    persistTemplates();
+    persistFlows();
+    loadFlow(newFlow);
+    showToast(`Flow "${flowName}" imported with ${collectedTemplateIds.length} template(s).`);
+  }
+}
+
+function handleFlowDataTemplate() {
+  const flow = flows.find((f) => f.id === activeFlowId);
+  if (!flow) return;
+
+  const mergedConfigs = [];
+  for (const tplId of (flow.templateIds || [])) {
+    const tpl = templates.find((t) => t.id === tplId);
+    if (tpl && tpl.fieldConfigs) {
+      const enabled = tpl.fieldConfigs.filter((f) => f.enabled !== false);
+      mergedConfigs.push(...enabled);
+    }
+  }
+
+  const dataTemplate = buildDataTemplate(mergedConfigs, flow.name, "flow");
+  const filename = slugify(flow.name) + "-data-template.json";
+  downloadJson(dataTemplate, filename);
+  showToast("Data template downloaded.");
+}
+
+// ── Import conflict modal ────────────────────────────────────────
+
+function showImportConflictModal(itemName, itemType, { showAttach = false } = {}) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById("importConflictModal");
+    const attachBtn = document.getElementById("conflictAttach");
+    document.getElementById("conflictTitle").textContent = `Duplicate ${itemType} found`;
+    document.getElementById("conflictMessage").textContent =
+      `A ${itemType} named "${itemName}" already exists. What would you like to do?`;
+    attachBtn.classList.toggle("hidden", !showAttach);
+    modal.classList.remove("hidden");
+
+    function cleanup(result) {
+      modal.classList.add("hidden");
+      attachBtn.classList.add("hidden");
+      document.getElementById("conflictCreateNew").removeEventListener("click", onNew);
+      document.getElementById("conflictReplace").removeEventListener("click", onReplace);
+      attachBtn.removeEventListener("click", onAttach);
+      document.getElementById("conflictCancel").removeEventListener("click", onCancel);
+      modal.removeEventListener("click", onOverlay);
+      resolve(result);
+    }
+
+    function onNew() { cleanup("new"); }
+    function onReplace() { cleanup("replace"); }
+    function onAttach() { cleanup("attach"); }
+    function onCancel() { cleanup("cancel"); }
+    function onOverlay(e) { if (e.target === modal) cleanup("cancel"); }
+
+    document.getElementById("conflictCreateNew").addEventListener("click", onNew);
+    document.getElementById("conflictReplace").addEventListener("click", onReplace);
+    attachBtn.addEventListener("click", onAttach);
+    document.getElementById("conflictCancel").addEventListener("click", onCancel);
+    modal.addEventListener("click", onOverlay);
+  });
 }
 
 // ── Utilities ────────────────────────────────────────────────────

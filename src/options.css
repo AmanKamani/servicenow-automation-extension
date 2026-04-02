@@ -109,6 +109,12 @@ body {
   font-weight: 700;
 }
 
+.panel-header-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
 .section-icon {
   width: 1.3em;
   height: 1.3em;
@@ -186,6 +192,18 @@ body {
   margin-top: 2px;
 }
 
+.tpl-item-key {
+  font-size: var(--sn-font-xs);
+  color: var(--sn-text-faint);
+  font-family: monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.7;
+  display: block;
+  margin-top: 1px;
+}
+
 /* ── Column 2: Editor ─────────────────────────────────── */
 
 .panel-editor {
@@ -226,6 +244,20 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+}
+
+.editor-key-display {
+  width: 100%;
+  font-size: var(--sn-font-xs);
+  font-family: monospace;
+  color: var(--sn-text-faint);
+  margin-top: -6px;
+  user-select: all;
+}
+
+.editor-key-display.hidden {
+  display: none;
 }
 
 .template-name-input {
@@ -496,6 +528,8 @@ textarea { resize: vertical; }
   background: var(--sn-bg-surface);
   border-left: 1px solid var(--sn-border-default);
   padding: 20px;
+  display: flex;
+  flex-direction: column;
 }
 
 .action-buttons {
@@ -1026,4 +1060,104 @@ textarea { resize: vertical; }
 
 .picker-cancel {
   margin-top: 4px;
+}
+
+/* ── Share action group ──────────────────────────────────────── */
+
+.action-group-title {
+  font-size: var(--sn-font-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--sn-text-muted);
+  margin: 4px 0 8px;
+  padding: 0;
+}
+
+/* ── Version info footer ─────────────────────────────────────── */
+
+.version-info {
+  margin-top: auto;
+  padding: 12px 0 0;
+  text-align: center;
+}
+
+.version-info span {
+  font-size: var(--sn-font-xs);
+  color: var(--sn-text-faint);
+  letter-spacing: 0.02em;
+}
+
+/* ── Warning button ──────────────────────────────────────────── */
+
+.btn-warning {
+  background: var(--sn-warning-btn-bg);
+  color: var(--sn-warning-btn-text);
+  border: none;
+}
+
+.btn-warning:hover {
+  background: var(--sn-warning-btn-hover);
+}
+
+/* ── Info button ─────────────────────────────────────────────── */
+
+.btn-info {
+  background: var(--sn-info-btn-bg);
+  color: var(--sn-info-btn-text);
+  border: none;
+}
+
+.btn-info:hover {
+  background: var(--sn-info-btn-hover);
+}
+
+/* ── Import conflict modal ───────────────────────────────────── */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--sn-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+}
+
+.modal-overlay.hidden {
+  display: none;
+}
+
+.modal-card {
+  background: var(--sn-modal-bg);
+  border-radius: var(--sn-modal-radius);
+  padding: 28px 32px;
+  box-shadow: var(--sn-modal-shadow);
+  min-width: 360px;
+  max-width: 520px;
+  text-align: center;
+}
+
+.modal-card h3 {
+  margin: 0 0 8px;
+  font-size: var(--sn-font-xl);
+  color: var(--sn-modal-title-color);
+}
+
+.modal-card p {
+  margin: 0 0 20px;
+  font-size: var(--sn-font-md);
+  color: var(--sn-modal-text-color);
+  line-height: 1.5;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.modal-actions .btn {
+  min-width: 110px;
 }
