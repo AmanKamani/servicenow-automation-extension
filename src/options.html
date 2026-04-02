@@ -21,13 +21,13 @@
     <!-- ─── Column 1: Template sidebar ─── -->
     <aside class="panel panel-sidebar">
       <div class="panel-header">
-        <h2>Templates</h2>
+        <h2 data-section-icon="templates">Templates</h2>
         <button id="newTemplateBtn" class="btn btn-primary btn-sm">+ New</button>
       </div>
       <div id="templateList" class="template-list"></div>
       <div class="sidebar-divider"></div>
       <div class="panel-header">
-        <h2>Flows</h2>
+        <h2 data-section-icon="flows">Flows</h2>
         <button id="newFlowBtn" class="btn btn-primary btn-sm">+ New</button>
       </div>
       <div id="flowList" class="template-list"></div>
@@ -52,7 +52,7 @@
         <!-- Payload values (generated dynamically from field configs) -->
         <section class="editor-section">
           <div class="section-header">
-            <h3>Payload Values</h3>
+            <h3 data-section-icon="payload">Payload Values</h3>
             <button id="exportPayloadBtn" class="btn btn-sm">Export JSON</button>
           </div>
           <p class="hint">One input per configured field. Export as JSON to use with "Upload JSON" in the popup.</p>
@@ -65,7 +65,7 @@
         <!-- Field configuration -->
         <section class="editor-section">
           <div class="section-header">
-            <h3>Field Configuration</h3>
+            <h3 data-section-icon="field-config">Field Configuration</h3>
             <div class="field-toolbar">
               <button id="addFieldBtn" class="btn btn-sm">+ Add Field</button>
               <button id="resetFieldsBtn" class="btn btn-sm btn-muted">Reset Defaults</button>
@@ -101,7 +101,7 @@
         </div>
 
         <section class="editor-section">
-          <h3>Start URL</h3>
+          <h3 data-section-icon="start-url">Start URL</h3>
           <p class="hint">The page to navigate to before each request in a batch (e.g. the "New Request" page URL).</p>
           <input type="text" id="flowStartUrl" placeholder="https://mycompany.service-now.com/sp?id=sc_cat_item&sys_id=...">
           <label class="flow-toggle" title="When ON, navigates to Start URL before every request including the first. When OFF, skips navigation for the first request (assumes you're already on the page).">
@@ -111,7 +111,7 @@
         </section>
 
         <section class="editor-section">
-          <h3>Error Handling</h3>
+          <h3 data-section-icon="error-handling">Error Handling</h3>
           <p class="hint">What to do when a request fails during a batch run.</p>
           <div class="flow-settings-grid">
             <div>
@@ -134,7 +134,7 @@
 
         <section class="editor-section">
           <div class="section-header">
-            <h3>Templates in Flow</h3>
+            <h3 data-section-icon="flow-templates">Templates in Flow</h3>
             <button id="addFlowTemplateBtn" class="btn btn-sm">+ Add Template</button>
           </div>
           <p class="hint">Templates execute in order. Each template fills fields and clicks buttons as configured.</p>
@@ -164,6 +164,7 @@
 
   <div id="toast" class="toast"></div>
 
+  <script src="section-icons.js"></script>
   <script src="storage-defaults.js"></script>
   <script src="options.js"></script>
 </body>

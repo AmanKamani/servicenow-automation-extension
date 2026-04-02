@@ -69,6 +69,40 @@ h2 {
   padding: 8px 0;
 }
 
+.select-with-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.select-with-link select {
+  flex: 1;
+  min-width: 0;
+}
+
+.config-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #475569;
+  text-decoration: none;
+  font-size: 15px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.config-link:hover {
+  background: #3b82f6;
+  color: #fff;
+}
+
+.config-link.hidden { display: none; }
+
 #templateSelect {
   width: 100%;
   padding: 8px 10px;

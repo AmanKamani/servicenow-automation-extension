@@ -75,6 +75,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     e.preventDefault();
     chrome.tabs.create({ url: "chrome://extensions" });
   });
+
+  // Deep-link: open a specific template or flow via URL hash
+  const hash = window.location.hash;
+  if (hash) {
+    const m = hash.match(/^#(template|flow)=(.+)$/);
+    if (m) {
+      const [, type, id] = m;
+      if (type === "template") {
+        const tpl = templates.find((t) => t.id === id);
+        if (tpl) loadTemplate(tpl);
+      } else {
+        const flow = flows.find((f) => f.id === id);
+        if (flow) loadFlow(flow);
+      }
+      window.location.hash = "";
+    }
+  }
 });
 
 // ── Template sidebar ─────────────────────────────────────────────
@@ -317,6 +334,7 @@ function renderPayloadForm() {
   const container = document.getElementById("payloadForm");
   const emptyMsg = document.getElementById("payloadEmpty");
   container.innerHTML = "";
+  container.className = "payload-stepper";
 
   if (fieldConfigs.length === 0) {
     container.classList.add("hidden");
@@ -327,62 +345,78 @@ function renderPayloadForm() {
   container.classList.remove("hidden");
   emptyMsg.classList.add("hidden");
 
-  fieldConfigs.forEach((cfg) => {
+  fieldConfigs.forEach((cfg, i) => {
     const key = cfg.key;
     const label = cfg.displayName || key;
     const isMulti = cfg.fieldType === "typeahead";
     const isButton = cfg.fieldType === "button";
     const isExpand = cfg.fieldType === "expand";
     const isDialog = cfg.fieldType === "dialog";
+    const isDisabled = cfg.enabled === false;
+
+    const stepTypeClass = "payload-step-" + (cfg.fieldType || "typeahead");
+    const step = document.createElement("div");
+    step.className = "payload-step " + stepTypeClass + (isDisabled ? " payload-step-disabled" : "");
+    step.dataset.step = i + 1;
+
+    const indicator = document.createElement("div");
+    indicator.className = "payload-step-indicator";
+    indicator.innerHTML = `<div class="payload-step-circle">${i + 1}</div><div class="payload-step-line"></div>`;
+
+    const content = document.createElement("div");
+    content.className = "payload-step-content";
 
     if (isButton || isExpand || isDialog) {
       const row = document.createElement("div");
       const actionClass = isButton ? " payload-action-button" : isExpand ? " payload-action-expand" : " payload-action-dialog";
       row.className = "payload-row payload-action-row" + actionClass;
-      const badge = isButton ? "Button" : isExpand ? "Expand" : "Dialog";
+      const dialogLabel = isDialog ? `Dialog: ${(cfg.dialogType || "alert").charAt(0).toUpperCase() + (cfg.dialogType || "alert").slice(1)}` : "";
+      const badge = isButton ? "Button" : isExpand ? "Expand" : dialogLabel;
       row.innerHTML = `<span class="payload-action-badge">${badge}</span><span class="payload-action-label">${esc(label)}</span>`;
-      container.appendChild(row);
-      return;
-    }
-
-    const currentValue = payloadValues[key];
-
-    const row = document.createElement("div");
-    row.className = "payload-row";
-
-    const labelEl = document.createElement("label");
-    labelEl.textContent = label;
-    if (isMulti) {
-      const small = document.createElement("small");
-      small.textContent = " (one per line)";
-      labelEl.appendChild(small);
-    }
-    const keyTag = document.createElement("span");
-    keyTag.className = "payload-key-tag";
-    keyTag.textContent = key;
-    labelEl.appendChild(keyTag);
-
-    let inputEl;
-    if (isMulti && Array.isArray(currentValue)) {
-      inputEl = document.createElement("textarea");
-      inputEl.rows = 3;
-      inputEl.value = currentValue.join("\n");
-    } else if (isMulti) {
-      inputEl = document.createElement("textarea");
-      inputEl.rows = 3;
-      inputEl.value = currentValue || "";
+      content.appendChild(row);
     } else {
-      inputEl = document.createElement("input");
-      inputEl.type = "text";
-      inputEl.value = currentValue || "";
+      const currentValue = payloadValues[key];
+      const row = document.createElement("div");
+      row.className = "payload-row";
+
+      const labelEl = document.createElement("label");
+      labelEl.textContent = label;
+      if (isMulti) {
+        const small = document.createElement("small");
+        small.textContent = " (one per line)";
+        labelEl.appendChild(small);
+      }
+      const keyTag = document.createElement("span");
+      keyTag.className = "payload-key-tag";
+      keyTag.textContent = key;
+      labelEl.appendChild(keyTag);
+
+      let inputEl;
+      if (isMulti && Array.isArray(currentValue)) {
+        inputEl = document.createElement("textarea");
+        inputEl.rows = 3;
+        inputEl.value = currentValue.join("\n");
+      } else if (isMulti) {
+        inputEl = document.createElement("textarea");
+        inputEl.rows = 3;
+        inputEl.value = currentValue || "";
+      } else {
+        inputEl = document.createElement("input");
+        inputEl.type = "text";
+        inputEl.value = currentValue || "";
+      }
+
+      inputEl.dataset.payKey = key;
+      inputEl.placeholder = `Enter ${label.toLowerCase()}`;
+
+      row.appendChild(labelEl);
+      row.appendChild(inputEl);
+      content.appendChild(row);
     }
 
-    inputEl.dataset.payKey = key;
-    inputEl.placeholder = `Enter ${label.toLowerCase()}`;
-
-    row.appendChild(labelEl);
-    row.appendChild(inputEl);
-    container.appendChild(row);
+    step.appendChild(indicator);
+    step.appendChild(content);
+    container.appendChild(step);
   });
 }
 
@@ -420,7 +454,7 @@ function renderFieldList() {
 
   fieldConfigs.forEach((cfg, idx) => {
     const isAction = cfg.fieldType === "button" || cfg.fieldType === "expand" || cfg.fieldType === "dialog";
-    const typeClassMap = { button: "field-item-button", expand: "field-item-expand", dialog: "field-item-dialog", typeahead: "field-item-input", text: "field-item-input", choice: "field-item-input" };
+    const typeClassMap = { button: "field-item-button", expand: "field-item-expand", dialog: "field-item-dialog", typeahead: "field-item-typeahead", text: "field-item-text", choice: "field-item-choice" };
     const typeClass = typeClassMap[cfg.fieldType] || "field-item-input";
     const item = document.createElement("div");
     item.className = "field-item" + (cfg.enabled === false ? " disabled-field" : "") + (typeClass ? " " + typeClass : "");
@@ -429,9 +463,9 @@ function renderFieldList() {
       button: '<span class="field-type-badge badge-button">Action: Button</span>',
       expand: '<span class="field-type-badge badge-expand">Action: Expand</span>',
       dialog: '<span class="field-type-badge badge-dialog">Action: Dialog</span>',
-      typeahead: '<span class="field-type-badge badge-input">Input: Typeahead</span>',
-      text: '<span class="field-type-badge badge-input">Input: Text</span>',
-      choice: '<span class="field-type-badge badge-input">Input: Choice</span>',
+      typeahead: '<span class="field-type-badge badge-typeahead">Input: Typeahead</span>',
+      text: '<span class="field-type-badge badge-text">Input: Text</span>',
+      choice: '<span class="field-type-badge badge-choice">Input: Choice</span>',
     };
     const typeBadge = typeBadgeMap[cfg.fieldType] || "";
 
@@ -442,18 +476,6 @@ function renderFieldList() {
       </div>
       <div class="field-body">
         <div class="full-width field-badge-row">${typeBadge}</div>
-        <div>
-          <label title="Unique identifier used as the key in payload JSON. Keep it short, e.g. groupName, members.">Key</label>
-          <input type="text" data-field="key" data-idx="${idx}" value="${esc(cfg.key)}">
-        </div>
-        <div>
-          <label title="Friendly name shown in the UI and console logs. For buttons: the visible button text to find and click.">Display Name</label>
-          <input type="text" data-field="displayName" data-idx="${idx}" value="${esc(cfg.displayName)}">
-        </div>
-        <div class="full-width" style="${(cfg.fieldType === "button" || cfg.fieldType === "dialog") ? "display:none" : ""}">
-          <label title="Text to match against visible elements on the ServiceNow page. For expand: matches link/toggle text. Can be the full label or a unique partial fragment. Multiple values are comma-separated — any match wins.">Label Match <small>(full label or partial text, comma-separated)</small></label>
-          <input type="text" data-field="labelMatch" data-idx="${idx}" value="${esc((cfg.labelMatch || []).join(", "))}">
-        </div>
         <div>
           <label title="Typeahead: dropdowns that search as you type. Text: plain input/textarea. Choice: native HTML select. Button: finds and clicks a button by its visible text. Expand: clicks an expandable section/toggle to reveal hidden fields.">Field Type</label>
           <select data-field="fieldType" data-idx="${idx}">
@@ -484,9 +506,21 @@ function renderFieldList() {
           <label title="The text string to return from window.prompt(). Simulates the user typing this value and clicking OK.">Prompt Return Value</label>
           <input type="text" data-field="promptReturnValue" data-idx="${idx}" value="${esc(cfg.promptReturnValue || "")}">
         </div>
+        <div>
+          <label title="Unique identifier used as the key in payload JSON. Keep it short, e.g. groupName, members.">Key</label>
+          <input type="text" data-field="key" data-idx="${idx}" value="${esc(cfg.key)}">
+        </div>
+        <div>
+          <label title="Friendly name shown in the UI and console logs. For buttons: the visible button text to find and click.">Display Name</label>
+          <input type="text" data-field="displayName" data-idx="${idx}" value="${esc(cfg.displayName)}">
+        </div>
+        <div class="full-width" style="${(cfg.fieldType === "button" || cfg.fieldType === "dialog") ? "display:none" : ""}">
+          <label title="Text to match against visible elements on the ServiceNow page. For expand: matches link/toggle text. Can be the full label or a unique partial fragment. Multiple values are comma-separated — any match wins.">Label Match <small>(full label or partial text, comma-separated)</small></label>
+          <input type="text" data-field="labelMatch" data-idx="${idx}" value="${esc((cfg.labelMatch || []).join(", "))}">
+        </div>
         <div class="timeout-field" style="${(cfg.fieldType === "text" || cfg.fieldType === "button" || cfg.fieldType === "expand" || cfg.fieldType === "dialog") ? "display:none" : ""}">
           <label title="How long (ms) to wait after typing for AJAX search results to load. Slow fields like member lookup may need 5000–10000ms. Max: 60000ms.">Search Wait <small>(ms, max 60s)</small></label>
-          <input type="number" data-field="ajaxWait" data-idx="${idx}" value="${cfg.ajaxWait || 1500}" min="500" max="60000" step="500">
+          <input type="number" data-field="ajaxWait" data-idx="${idx}" value="${cfg.ajaxWait || 1500}" min="100" max="60000" step="100">
         </div>
         <div class="timeout-field" style="${(cfg.fieldType === "text" || cfg.fieldType === "button" || cfg.fieldType === "expand" || cfg.fieldType === "dialog") ? "display:none" : ""}">
           <label title="After the search wait, how many times to poll for dropdown items (~400ms each). More retries = more time for slow-rendering results. e.g. 15 retries ≈ 6s of polling.">Dropdown Retries</label>
@@ -503,7 +537,7 @@ function renderFieldList() {
         </div>
         <div class="button-wait-field" style="${((cfg.fieldType !== "button" && cfg.fieldType !== "expand") || (cfg.buttonWait !== "fixed_wait")) ? "display:none" : ""}">
           <label title="How long (ms) to wait after clicking the button.">Wait Duration <small>(ms)</small></label>
-          <input type="number" data-field="buttonWaitMs" data-idx="${idx}" value="${cfg.buttonWaitMs || 3000}" min="500" max="60000" step="500">
+          <input type="number" data-field="buttonWaitMs" data-idx="${idx}" value="${cfg.buttonWaitMs || 3000}" min="100" max="60000" step="100">
         </div>
         <div class="full-width default-value-field" style="${(cfg.fieldType === "expand" || cfg.fieldType === "button" || cfg.fieldType === "dialog") ? "display:none" : ""}">
           <label title="Pre-filled value used when no payload value is provided. Also used as placeholder in exported JSON.">Default Value</label>
@@ -514,6 +548,7 @@ function renderFieldList() {
             <input type="checkbox" data-field="enabled" data-idx="${idx}" ${cfg.enabled !== false ? "checked" : ""}>
             Enabled
           </label>
+          <button class="btn btn-sm" data-action="duplicate" data-idx="${idx}">Duplicate</button>
           <button class="btn btn-sm btn-danger" data-action="delete" data-idx="${idx}">Remove</button>
         </div>
       </div>
@@ -537,6 +572,20 @@ function handleFieldAction(e) {
     renderFieldList();
     renderPayloadForm();
     scheduleAutoSave();
+  } else if (btn.dataset.action === "duplicate") {
+    const clone = JSON.parse(JSON.stringify(fieldConfigs[idx]));
+    clone.key = `${clone.key}_copy_${Date.now()}`;
+    clone.displayName = `${clone.displayName} (copy)`;
+    fieldConfigs.splice(idx + 1, 0, clone);
+    renderFieldList();
+    renderPayloadForm();
+    scheduleAutoSave();
+    const newItem = document.getElementById("fieldList").children[idx + 1];
+    if (newItem) {
+      newItem.classList.add("field-highlight");
+      newItem.scrollIntoView({ behavior: "smooth", block: "center" });
+      setTimeout(() => newItem.classList.remove("field-highlight"), 2000);
+    }
   } else if (btn.dataset.action === "delete") {
     if (confirm(`Remove field "${fieldConfigs[idx].displayName}"?`)) {
       fieldConfigs.splice(idx, 1);
@@ -557,6 +606,8 @@ function handleFieldChange(e) {
     fieldConfigs[idx].labelMatch = el.value.split(",").map((s) => s.trim()).filter(Boolean);
   } else if (field === "enabled") {
     fieldConfigs[idx].enabled = el.checked;
+    const fieldItem = el.closest(".field-item");
+    if (fieldItem) fieldItem.classList.toggle("disabled-field", !el.checked);
   } else if (field === "ajaxWait") {
     let val = parseInt(el.value, 10) || 1500;
     if (val > 60000) { val = 60000; el.value = 60000; }
@@ -609,18 +660,45 @@ function handleFieldChange(e) {
 }
 
 function addField() {
-  fieldConfigs.push({
-    key: `field_${Date.now()}`,
-    displayName: "New Field",
-    labelMatch: [],
-    fieldType: "typeahead",
-    ajaxWait: 1500,
-    dropdownRetries: 15,
-    enabled: true,
+  const overlay = document.createElement("div");
+  overlay.className = "field-type-picker-overlay";
+  overlay.innerHTML = `
+    <div class="field-type-picker">
+      <h3>Select Field Type</h3>
+      <div class="field-type-picker-grid">
+        <button data-type="typeahead" class="picker-btn picker-typeahead">Typeahead</button>
+        <button data-type="text" class="picker-btn picker-text">Text</button>
+        <button data-type="choice" class="picker-btn picker-choice">Choice</button>
+        <button data-type="button" class="picker-btn picker-button">Button</button>
+        <button data-type="expand" class="picker-btn picker-expand">Expand</button>
+        <button data-type="dialog" class="picker-btn picker-dialog">Dialog</button>
+      </div>
+      <button class="btn btn-sm btn-muted picker-cancel">Cancel</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector(".picker-cancel").addEventListener("click", () => overlay.remove());
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+
+  overlay.querySelectorAll(".picker-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const type = btn.dataset.type;
+      const base = { key: `field_${Date.now()}`, displayName: "New Field", enabled: true };
+      if (type === "button" || type === "expand") {
+        Object.assign(base, { fieldType: type, buttonWait: "smart_wait" });
+      } else if (type === "dialog") {
+        Object.assign(base, { fieldType: type, dialogType: "alert" });
+      } else {
+        Object.assign(base, { fieldType: type, labelMatch: [], ajaxWait: 1500, dropdownRetries: 15 });
+      }
+      fieldConfigs.push(base);
+      renderFieldList();
+      renderPayloadForm();
+      scheduleAutoSave();
+      overlay.remove();
+    });
   });
-  renderFieldList();
-  renderPayloadForm();
-  scheduleAutoSave();
 }
 
 function resetFields() {

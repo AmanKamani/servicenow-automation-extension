@@ -5,7 +5,9 @@ const runBtn = document.getElementById("runBtn");
 const stopBtn = document.getElementById("stopBtn");
 const logList = document.getElementById("logList");
 const templateSelect = document.getElementById("templateSelect");
+const templateConfigLink = document.getElementById("templateConfigLink");
 const flowSelect = document.getElementById("flowSelect");
+const flowConfigLink = document.getElementById("flowConfigLink");
 const flowDataFile = document.getElementById("flowDataFile");
 const flowFileNameDisplay = document.getElementById("flowFileNameDisplay");
 const progressDisplay = document.getElementById("progressDisplay");
@@ -239,11 +241,19 @@ function populateTemplates() {
 
   const lastId = storageData[STORAGE_KEYS.LAST_TEMPLATE_ID];
   if (lastId) templateSelect.value = lastId;
+  templateConfigLink.classList.toggle("hidden", !templateSelect.value);
 }
 
 templateSelect.addEventListener("change", () => {
   chrome.storage.sync.set({ [STORAGE_KEYS.LAST_TEMPLATE_ID]: templateSelect.value });
+  templateConfigLink.classList.toggle("hidden", !templateSelect.value);
   loadSelectedTemplate();
+});
+
+templateConfigLink.addEventListener("click", (e) => {
+  e.preventDefault();
+  const id = templateSelect.value;
+  if (id) chrome.tabs.create({ url: chrome.runtime.getURL("src/options.html") + "#template=" + id });
 });
 
 function loadSelectedTemplate() {
@@ -306,11 +316,19 @@ function populateFlows() {
 
   const lastId = storageData[STORAGE_KEYS.LAST_FLOW_ID];
   if (lastId) flowSelect.value = lastId;
+  flowConfigLink.classList.toggle("hidden", !flowSelect.value);
 }
 
 flowSelect.addEventListener("change", () => {
   chrome.storage.sync.set({ [STORAGE_KEYS.LAST_FLOW_ID]: flowSelect.value });
+  flowConfigLink.classList.toggle("hidden", !flowSelect.value);
   loadSelectedFlow();
+});
+
+flowConfigLink.addEventListener("click", (e) => {
+  e.preventDefault();
+  const id = flowSelect.value;
+  if (id) chrome.tabs.create({ url: chrome.runtime.getURL("src/options.html") + "#flow=" + id });
 });
 
 function loadSelectedFlow() {

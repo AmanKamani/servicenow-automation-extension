@@ -29,16 +29,22 @@
 
     <!-- Template mode -->
     <section id="modeTemplate" class="mode-panel hidden">
-      <select id="templateSelect">
-        <option value="">Select a template...</option>
-      </select>
+      <div class="select-with-link">
+        <select id="templateSelect">
+          <option value="">Select a template...</option>
+        </select>
+        <a id="templateConfigLink" class="config-link hidden" title="Open in configuration">&#x2197;</a>
+      </div>
     </section>
 
     <!-- Flow mode -->
     <section id="modeFlow" class="mode-panel hidden">
-      <select id="flowSelect">
-        <option value="">Select a flow...</option>
-      </select>
+      <div class="select-with-link">
+        <select id="flowSelect">
+          <option value="">Select a flow...</option>
+        </select>
+        <a id="flowConfigLink" class="config-link hidden" title="Open in configuration">&#x2197;</a>
+      </div>
       <label for="flowDataFile" class="file-label flow-data-upload">
         <span id="flowFileNameDisplay">Upload data JSON (array of requests)...</span>
         <input type="file" id="flowDataFile" accept=".json,application/json">
