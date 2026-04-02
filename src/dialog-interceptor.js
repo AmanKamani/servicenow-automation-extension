@@ -1,5 +1,5 @@
 // Runs in MAIN world at document_start via manifest content_scripts.
-// Overrides window.alert BEFORE any page JS executes.
+// Overrides window.alert and window.confirm BEFORE any page JS executes.
 // Dormant by default (passes through). Armed via postMessage from content script.
 
 (function () {
@@ -10,7 +10,10 @@
 
   window.addEventListener("message", function (event) {
     if (event.data && event.data.type === "__SN_SET_DIALOG_CONFIG") {
-      config = { dialogAction: event.data.dialogAction || "ok" };
+      config = {
+        dialogAction: event.data.dialogAction || "ok",
+        confirmReturnValue: event.data.confirmReturnValue !== false,
+      };
     }
     if (event.data && event.data.type === "__SN_CLEAR_DIALOG_CONFIG") {
       config = null;
@@ -18,6 +21,7 @@
   });
 
   var originalAlert = window.alert;
+  var originalConfirm = window.confirm;
 
   window.alert = function (message) {
     if (config) {
@@ -30,5 +34,20 @@
       return undefined;
     }
     return originalAlert.apply(this, arguments);
+  };
+
+  window.confirm = function (message) {
+    if (config) {
+      var returnValue = config.confirmReturnValue;
+      console.log("[SN Dialog] confirm intercepted:", message, "-> returning", returnValue);
+      window.postMessage({
+        type: "__SN_DIALOG_INTERCEPTED",
+        dialogType: "confirm",
+        message: String(message || ""),
+        returnValue: returnValue,
+      }, "*");
+      return returnValue;
+    }
+    return originalConfirm.apply(this, arguments);
   };
 })();

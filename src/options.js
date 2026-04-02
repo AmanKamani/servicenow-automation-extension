@@ -462,7 +462,21 @@ function renderFieldList() {
             <option value="choice" ${cfg.fieldType === "choice" ? "selected" : ""}>Choice (native select)</option>
             <option value="button" ${cfg.fieldType === "button" ? "selected" : ""}>Button (click)</option>
             <option value="expand" ${cfg.fieldType === "expand" ? "selected" : ""}>Expand (toggle section)</option>
-            <option value="dialog" ${cfg.fieldType === "dialog" ? "selected" : ""}>Dialog (alert)</option>
+            <option value="dialog" ${cfg.fieldType === "dialog" ? "selected" : ""}>Dialog (alert/confirm)</option>
+          </select>
+        </div>
+        <div style="${cfg.fieldType === "dialog" ? "" : "display:none"}">
+          <label title="Which native browser dialog to intercept.">Dialog Type</label>
+          <select data-field="dialogType" data-idx="${idx}">
+            <option value="alert" ${(cfg.dialogType || "alert") === "alert" ? "selected" : ""}>Alert</option>
+            <option value="confirm" ${cfg.dialogType === "confirm" ? "selected" : ""}>Confirm</option>
+          </select>
+        </div>
+        <div style="${(cfg.fieldType === "dialog" && cfg.dialogType === "confirm") ? "" : "display:none"}">
+          <label title="The value to return from window.confirm(). true = OK, false = Cancel.">Confirm Return Value</label>
+          <select data-field="dialogReturnValue" data-idx="${idx}">
+            <option value="true" ${(cfg.dialogReturnValue !== false) ? "selected" : ""}>true (OK)</option>
+            <option value="false" ${cfg.dialogReturnValue === false ? "selected" : ""}>false (Cancel)</option>
           </select>
         </div>
         <div class="timeout-field" style="${(cfg.fieldType === "text" || cfg.fieldType === "button" || cfg.fieldType === "expand" || cfg.fieldType === "dialog") ? "display:none" : ""}">
@@ -563,6 +577,11 @@ function handleFieldChange(e) {
     if (val > 60000) { val = 60000; el.value = 60000; }
     if (val < 500) { val = 500; el.value = 500; }
     fieldConfigs[idx].buttonWaitMs = val;
+  } else if (field === "dialogType") {
+    fieldConfigs[idx].dialogType = el.value;
+    renderFieldList();
+  } else if (field === "dialogReturnValue") {
+    fieldConfigs[idx].dialogReturnValue = el.value === "true";
   } else {
     const oldKey = fieldConfigs[idx][field];
     fieldConfigs[idx][field] = el.value;

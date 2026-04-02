@@ -111,10 +111,13 @@
         continue;
       }
 
-      // ── Dialog field type — arm the MAIN world interceptor for alert ──
+      // ── Dialog field type — arm the MAIN world interceptor for alert/confirm ──
       if (cfg.fieldType === "dialog") {
-        reportStep(`[${i + 1}/${fieldConfigs.length}] Arming alert interceptor — will auto-dismiss next alert.`, "step");
-        window.postMessage({ type: "__SN_SET_DIALOG_CONFIG", dialogAction: "ok" }, "*");
+        const dlgType = cfg.dialogType || "alert";
+        const dlgReturn = cfg.dialogReturnValue !== false;
+        const desc = dlgType === "confirm" ? `confirm (return ${dlgReturn})` : "alert";
+        reportStep(`[${i + 1}/${fieldConfigs.length}] Arming ${desc} interceptor — will auto-dismiss next dialog.`);
+        window.postMessage({ type: "__SN_SET_DIALOG_CONFIG", dialogAction: "ok", confirmReturnValue: dlgReturn }, "*");
         await sleep(50);
         continue;
       }
@@ -132,8 +135,11 @@
         const nextCfg = fieldConfigs[i + 1];
         let dialogArmed = false;
         if (nextCfg && nextCfg.fieldType === "dialog") {
-          reportStep(`  Pre-arming dialog interceptor (next field is dialog)...`, "step");
-          window.postMessage({ type: "__SN_SET_DIALOG_CONFIG", dialogAction: "ok" }, "*");
+          const dlgType = nextCfg.dialogType || "alert";
+          const dlgReturn = nextCfg.dialogReturnValue !== false;
+          const desc = dlgType === "confirm" ? `confirm (return ${dlgReturn})` : "alert";
+          reportStep(`  Pre-arming ${desc} interceptor (next field is dialog)...`);
+          window.postMessage({ type: "__SN_SET_DIALOG_CONFIG", dialogAction: "ok", confirmReturnValue: dlgReturn }, "*");
           await sleep(50);
           dialogArmed = true;
         }
@@ -152,7 +158,7 @@
             const timer = setTimeout(() => {
               if (!done) {
                 done = true;
-                reportStep(`  Dialog interceptor: no alert detected within timeout — continuing.`, "step");
+                reportStep(`  Dialog interceptor: no dialog detected within timeout — continuing.`, "step");
                 resolve();
               }
             }, 2000);
@@ -162,7 +168,9 @@
                 clearTimeout(timer);
                 if (!done) {
                   done = true;
-                  reportStep(`  Alert auto-dismissed: "${e.data.message}"`, "step");
+                  const dtype = e.data.dialogType || "alert";
+                  const extra = dtype === "confirm" ? ` (returned ${e.data.returnValue})` : "";
+                  reportStep(`  ${dtype} auto-dismissed: "${e.data.message}"${extra}`, "step");
                   resolve();
                 }
               }
