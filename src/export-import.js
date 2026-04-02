@@ -167,7 +167,9 @@ function buildDataTemplate(fieldConfigs, targetName, targetType) {
 
   const placeholder = {};
   for (const f of inputConfigs) {
-    placeholder[f.key] = f.fieldType === "typeahead" ? [] : "";
+    if (f.fieldType === "typeahead") placeholder[f.key] = [];
+    else if (f.fieldType === "checkbox") placeholder[f.key] = false;
+    else placeholder[f.key] = "";
   }
 
   return {

@@ -680,6 +680,12 @@ textarea { resize: vertical; }
   border: 1px solid var(--app-type-choice-border);
 }
 
+.badge-checkbox {
+  background: var(--app-type-checkbox-bg);
+  color: var(--app-type-checkbox-text);
+  border: 1px solid var(--app-type-checkbox-border);
+}
+
 .badge-dialog {
   background: var(--app-type-dialog-bg);
   color: var(--app-type-dialog-text);
@@ -704,6 +710,10 @@ textarea { resize: vertical; }
 
 .field-item-expand {
   border-left: 3px solid var(--app-type-expand-accent);
+}
+
+.field-item-checkbox {
+  border-left: 3px solid var(--app-type-checkbox-accent);
 }
 
 .field-item-dialog {
@@ -793,7 +803,8 @@ textarea { resize: vertical; }
 .payload-step-dialog .payload-step-circle  { background: var(--app-type-dialog-accent); }
 .payload-step-typeahead .payload-step-circle { background: var(--app-primary); }
 .payload-step-text .payload-step-circle     { background: var(--app-type-text-accent); }
-.payload-step-choice .payload-step-circle   { background: var(--app-type-choice-accent); }
+.payload-step-choice .payload-step-circle    { background: var(--app-type-choice-accent); }
+.payload-step-checkbox .payload-step-circle  { background: var(--app-type-checkbox-accent); }
 
 /* ── Payload action indicator rows ───────────────────── */
 
@@ -851,6 +862,86 @@ textarea { resize: vertical; }
   color: var(--app-text-muted);
   font-weight: 500;
   font-style: italic;
+}
+
+/* ── Toggle switch (shared by payload & field config) ── */
+
+.app-toggle {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.app-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.app-toggle .toggle-track {
+  position: absolute;
+  inset: 0;
+  background: var(--app-border-input);
+  border-radius: 12px;
+  transition: background 0.2s;
+  cursor: pointer;
+}
+
+.app-toggle .toggle-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+.app-toggle input:checked + .toggle-track {
+  background: var(--app-type-checkbox-accent);
+}
+
+.app-toggle input:checked + .toggle-track::after {
+  transform: translateX(20px);
+}
+
+.toggle-value-label {
+  font-size: var(--app-font-sm);
+  font-weight: 600;
+  min-width: 32px;
+  vertical-align: middle;
+  margin-left: 8px;
+}
+
+.toggle-value-label.is-true { color: var(--app-type-checkbox-text); }
+.toggle-value-label.is-false { color: var(--app-text-muted); }
+
+/* ── Payload checkbox row ────────────────────────────── */
+
+.payload-checkbox-row {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 8px 14px;
+  align-items: center;
+}
+
+.payload-checkbox-row label {
+  font-size: var(--app-font-md);
+  font-weight: 600;
+  padding-top: 0;
+  color: var(--app-text-secondary);
+}
+
+.payload-toggle-wrap {
+  display: flex;
+  align-items: center;
 }
 
 /* ── Toast ────────────────────────────────────────────── */
@@ -1055,6 +1146,8 @@ textarea { resize: vertical; }
 .picker-button:hover { background: var(--app-type-button-bg); }
 .picker-expand { color: var(--app-type-expand-text); border-color: var(--app-type-expand-border); }
 .picker-expand:hover { background: var(--app-type-expand-bg); }
+.picker-checkbox { color: var(--app-type-checkbox-text); border-color: var(--app-type-checkbox-border); }
+.picker-checkbox:hover { background: var(--app-type-checkbox-bg); }
 .picker-dialog { color: var(--app-type-dialog-text); border-color: var(--app-type-dialog-border); }
 .picker-dialog:hover { background: var(--app-type-dialog-bg); }
 

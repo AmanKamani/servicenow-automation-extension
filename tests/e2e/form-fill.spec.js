@@ -179,3 +179,163 @@ test.describe("Form filling", () => {
     await expect(page.locator("#notes")).toHaveValue("Placeholder Match");
   });
 });
+
+test.describe("Checkbox filling", () => {
+  test("checks a native checkbox via label[for] strategy", async ({
+    context,
+    testServer,
+  }) => {
+    const sw = await getServiceWorker(context);
+    const page = await context.newPage();
+    await page.goto(`${testServer}/test-form.html`);
+    await page.waitForLoadState("domcontentloaded");
+    await page.bringToFront();
+
+    const configs = [
+      {
+        key: "terms",
+        displayName: "Accept Terms",
+        labelMatch: ["accept terms"],
+        fieldType: "checkbox",
+        enabled: true,
+      },
+    ];
+
+    const result = await runAutomation(sw, { terms: true }, configs);
+    expect(result.ok).toBe(true);
+    await expect(page.locator("#termsCheckbox")).toBeChecked();
+  });
+
+  test("unchecks a native checkbox when value is false", async ({
+    context,
+    testServer,
+  }) => {
+    const sw = await getServiceWorker(context);
+    const page = await context.newPage();
+    await page.goto(`${testServer}/test-form.html`);
+    await page.waitForLoadState("domcontentloaded");
+    await page.bringToFront();
+
+    // Pre-check the box, then run with false
+    await page.locator("#termsCheckbox").check();
+    await expect(page.locator("#termsCheckbox")).toBeChecked();
+
+    const configs = [
+      {
+        key: "terms",
+        displayName: "Accept Terms",
+        labelMatch: ["accept terms"],
+        fieldType: "checkbox",
+        enabled: true,
+      },
+    ];
+
+    const result = await runAutomation(sw, { terms: false }, configs);
+    expect(result.ok).toBe(true);
+    await expect(page.locator("#termsCheckbox")).not.toBeChecked();
+  });
+
+  test("checks a checkbox found by labelWrap strategy", async ({
+    context,
+    testServer,
+  }) => {
+    const sw = await getServiceWorker(context);
+    const page = await context.newPage();
+    await page.goto(`${testServer}/test-form.html`);
+    await page.waitForLoadState("domcontentloaded");
+    await page.bringToFront();
+
+    const configs = [
+      {
+        key: "newsletter",
+        displayName: "Newsletter",
+        labelMatch: ["subscribe to newsletter"],
+        fieldType: "checkbox",
+        enabled: true,
+      },
+    ];
+
+    const result = await runAutomation(sw, { newsletter: true }, configs);
+    expect(result.ok).toBe(true);
+    await expect(page.locator("#newsletterCheckbox")).toBeChecked();
+  });
+
+  test("toggles a role=switch element via aria-label strategy", async ({
+    context,
+    testServer,
+  }) => {
+    const sw = await getServiceWorker(context);
+    const page = await context.newPage();
+    await page.goto(`${testServer}/test-form.html`);
+    await page.waitForLoadState("domcontentloaded");
+    await page.bringToFront();
+
+    const configs = [
+      {
+        key: "darkMode",
+        displayName: "Dark Mode",
+        labelMatch: ["dark mode"],
+        fieldType: "checkbox",
+        enabled: true,
+      },
+    ];
+
+    const result = await runAutomation(sw, { darkMode: true }, configs);
+    expect(result.ok).toBe(true);
+    await expect(page.locator("#darkModeToggle")).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+  });
+
+  test("accepts string 'true' and coerces to boolean", async ({
+    context,
+    testServer,
+  }) => {
+    const sw = await getServiceWorker(context);
+    const page = await context.newPage();
+    await page.goto(`${testServer}/test-form.html`);
+    await page.waitForLoadState("domcontentloaded");
+    await page.bringToFront();
+
+    const configs = [
+      {
+        key: "terms",
+        displayName: "Accept Terms",
+        labelMatch: ["accept terms"],
+        fieldType: "checkbox",
+        enabled: true,
+      },
+    ];
+
+    const result = await runAutomation(sw, { terms: "true" }, configs);
+    expect(result.ok).toBe(true);
+    await expect(page.locator("#termsCheckbox")).toBeChecked();
+  });
+
+  test("uses defaultValue when no payload value provided", async ({
+    context,
+    testServer,
+  }) => {
+    const sw = await getServiceWorker(context);
+    const page = await context.newPage();
+    await page.goto(`${testServer}/test-form.html`);
+    await page.waitForLoadState("domcontentloaded");
+    await page.bringToFront();
+
+    const configs = [
+      {
+        key: "terms",
+        displayName: "Accept Terms",
+        labelMatch: ["accept terms"],
+        fieldType: "checkbox",
+        defaultValue: "true",
+        enabled: true,
+      },
+    ];
+
+    const result = await runAutomation(sw, {}, configs);
+    expect(result.ok).toBe(true);
+    await expect(page.locator("#termsCheckbox")).toBeChecked();
+  });
+});

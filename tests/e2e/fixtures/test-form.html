@@ -57,6 +57,29 @@
     <textarea id="description" name="description" rows="3"></textarea>
   </div>
 
+  <!-- Native checkbox found by label[for] strategy -->
+  <div class="field-group">
+    <label for="termsCheckbox">Accept Terms</label>
+    <input type="checkbox" id="termsCheckbox" name="termsCheckbox">
+  </div>
+
+  <!-- Checkbox found by labelWrap strategy (label wraps input, no for attribute) -->
+  <div class="field-group">
+    <label>
+      <input type="checkbox" id="newsletterCheckbox" name="newsletterCheckbox">
+      Subscribe to Newsletter
+    </label>
+  </div>
+
+  <!-- Toggle switch found by aria-label strategy -->
+  <div class="field-group">
+    <div id="darkModeToggle" role="switch" aria-checked="false" aria-label="Dark Mode"
+         style="width:50px;height:26px;border-radius:13px;background:#ccc;cursor:pointer;position:relative;"
+         onclick="this.setAttribute('aria-checked', this.getAttribute('aria-checked')==='true'?'false':'true'); this.style.background=this.getAttribute('aria-checked')==='true'?'#22c55e':'#ccc';">
+      <span style="position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .2s;"></span>
+    </div>
+  </div>
+
   <!-- Expand toggle hiding extra fields -->
   <div class="field-group">
     <button id="expandBtn" type="button" aria-expanded="false"

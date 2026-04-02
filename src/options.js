@@ -36,6 +36,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Wire payload form events (once, uses event delegation)
   document.getElementById("payloadForm").addEventListener("input", handlePayloadInput);
+  document.getElementById("payloadForm").addEventListener("change", handlePayloadInput);
 
   // Wire flow template list events (delegation)
   document.getElementById("flowTemplateList").addEventListener("click", handleFlowTemplateAction);
@@ -388,6 +389,7 @@ function renderPayloadForm() {
     const isButton = cfg.fieldType === "button";
     const isExpand = cfg.fieldType === "expand";
     const isDialog = cfg.fieldType === "dialog";
+    const isCheckbox = cfg.fieldType === "checkbox";
     const isDisabled = cfg.enabled === false;
 
     const stepTypeClass = "payload-step-" + (cfg.fieldType || "typeahead");
@@ -409,6 +411,44 @@ function renderPayloadForm() {
       const dialogLabel = isDialog ? `Dialog: ${(cfg.dialogType || "alert").charAt(0).toUpperCase() + (cfg.dialogType || "alert").slice(1)}` : "";
       const badge = isButton ? "Button" : isExpand ? "Expand" : dialogLabel;
       row.innerHTML = `<span class="payload-action-badge">${badge}</span><span class="payload-action-label">${esc(label)}</span>`;
+      content.appendChild(row);
+    } else if (isCheckbox) {
+      const currentValue = payloadValues[key];
+      const checked = currentValue === true || currentValue === "true";
+      const row = document.createElement("div");
+      row.className = "payload-row payload-checkbox-row";
+
+      const labelEl = document.createElement("label");
+      labelEl.textContent = label;
+      const keyTag = document.createElement("span");
+      keyTag.className = "payload-key-tag";
+      keyTag.textContent = key;
+      labelEl.appendChild(keyTag);
+
+      const wrap = document.createElement("div");
+      wrap.className = "payload-toggle-wrap";
+
+      const toggleWrap = document.createElement("label");
+      toggleWrap.className = "app-toggle";
+      const toggleInput = document.createElement("input");
+      toggleInput.type = "checkbox";
+      toggleInput.checked = checked;
+      toggleInput.dataset.payKey = key;
+      toggleInput.dataset.payCheckbox = "true";
+      const toggleTrack = document.createElement("span");
+      toggleTrack.className = "toggle-track";
+      toggleWrap.appendChild(toggleInput);
+      toggleWrap.appendChild(toggleTrack);
+
+      const toggleLabel = document.createElement("span");
+      toggleLabel.className = "toggle-value-label " + (checked ? "is-true" : "is-false");
+      toggleLabel.textContent = checked ? "true" : "false";
+
+      wrap.appendChild(toggleWrap);
+      wrap.appendChild(toggleLabel);
+
+      row.appendChild(labelEl);
+      row.appendChild(wrap);
       content.appendChild(row);
     } else {
       const currentValue = payloadValues[key];
@@ -459,7 +499,16 @@ function renderPayloadForm() {
 function handlePayloadInput(e) {
   const key = e.target.dataset.payKey;
   if (!key) return;
-  payloadValues[key] = e.target.value;
+  if (e.target.dataset.payCheckbox) {
+    payloadValues[key] = e.target.checked;
+    const toggleLabel = e.target.closest(".payload-checkbox-row")?.querySelector(".toggle-value-label");
+    if (toggleLabel) {
+      toggleLabel.textContent = e.target.checked ? "true" : "false";
+      toggleLabel.className = "toggle-value-label " + (e.target.checked ? "is-true" : "is-false");
+    }
+  } else {
+    payloadValues[key] = e.target.value;
+  }
   scheduleAutoSave();
 }
 
@@ -468,6 +517,14 @@ function readPayloadFromForm() {
   fieldConfigs.forEach((cfg) => {
     if (cfg.fieldType === "button" || cfg.fieldType === "expand" || cfg.fieldType === "dialog") return;
     const key = cfg.key;
+
+    if (cfg.fieldType === "checkbox") {
+      let raw = payloadValues[key];
+      if (raw === undefined || raw === null) raw = cfg.defaultValue;
+      result[key] = raw === true || raw === "true";
+      return;
+    }
+
     let raw = payloadValues[key] || "";
     if (!raw && cfg.defaultValue) raw = cfg.defaultValue;
 
@@ -490,7 +547,7 @@ function renderFieldList() {
 
   fieldConfigs.forEach((cfg, idx) => {
     const isAction = cfg.fieldType === "button" || cfg.fieldType === "expand" || cfg.fieldType === "dialog";
-    const typeClassMap = { button: "field-item-button", expand: "field-item-expand", dialog: "field-item-dialog", typeahead: "field-item-typeahead", text: "field-item-text", choice: "field-item-choice" };
+    const typeClassMap = { button: "field-item-button", expand: "field-item-expand", dialog: "field-item-dialog", typeahead: "field-item-typeahead", text: "field-item-text", choice: "field-item-choice", checkbox: "field-item-checkbox" };
     const typeClass = typeClassMap[cfg.fieldType] || "field-item-input";
     const item = document.createElement("div");
     item.className = "field-item" + (cfg.enabled === false ? " disabled-field" : "") + (typeClass ? " " + typeClass : "");
@@ -502,6 +559,7 @@ function renderFieldList() {
       typeahead: '<span class="field-type-badge badge-typeahead">Input: Typeahead</span>',
       text: '<span class="field-type-badge badge-text">Input: Text</span>',
       choice: '<span class="field-type-badge badge-choice">Input: Choice</span>',
+      checkbox: '<span class="field-type-badge badge-checkbox">Input: Checkbox</span>',
     };
     const typeBadge = typeBadgeMap[cfg.fieldType] || "";
 
@@ -518,6 +576,7 @@ function renderFieldList() {
             <option value="typeahead" ${cfg.fieldType === "typeahead" ? "selected" : ""}>Typeahead</option>
             <option value="text" ${cfg.fieldType === "text" ? "selected" : ""}>Text</option>
             <option value="choice" ${cfg.fieldType === "choice" ? "selected" : ""}>Choice (native select)</option>
+            <option value="checkbox" ${cfg.fieldType === "checkbox" ? "selected" : ""}>Checkbox (true/false)</option>
             <option value="button" ${cfg.fieldType === "button" ? "selected" : ""}>Button (click)</option>
             <option value="expand" ${cfg.fieldType === "expand" ? "selected" : ""}>Expand (toggle section)</option>
             <option value="dialog" ${cfg.fieldType === "dialog" ? "selected" : ""}>Dialog (alert/confirm/prompt)</option>
@@ -554,11 +613,11 @@ function renderFieldList() {
           <label title="Text to match against visible elements on the target page. For expand: matches link/toggle text. Can be the full label or a unique partial fragment. Multiple values are comma-separated — any match wins.">Label Match <small>(full label or partial text, comma-separated)</small></label>
           <input type="text" data-field="labelMatch" data-idx="${idx}" value="${esc((cfg.labelMatch || []).join(", "))}">
         </div>
-        <div class="timeout-field" style="${(cfg.fieldType === "text" || cfg.fieldType === "button" || cfg.fieldType === "expand" || cfg.fieldType === "dialog") ? "display:none" : ""}">
+        <div class="timeout-field" style="${(cfg.fieldType === "text" || cfg.fieldType === "checkbox" || cfg.fieldType === "button" || cfg.fieldType === "expand" || cfg.fieldType === "dialog") ? "display:none" : ""}">
           <label title="How long (ms) to wait after typing for AJAX search results to load. Slow fields like member lookup may need 5000–10000ms. Max: 60000ms.">Search Wait <small>(ms, max 60s)</small></label>
           <input type="number" data-field="ajaxWait" data-idx="${idx}" value="${cfg.ajaxWait || 1500}" min="100" max="60000" step="100">
         </div>
-        <div class="timeout-field" style="${(cfg.fieldType === "text" || cfg.fieldType === "button" || cfg.fieldType === "expand" || cfg.fieldType === "dialog") ? "display:none" : ""}">
+        <div class="timeout-field" style="${(cfg.fieldType === "text" || cfg.fieldType === "checkbox" || cfg.fieldType === "button" || cfg.fieldType === "expand" || cfg.fieldType === "dialog") ? "display:none" : ""}">
           <label title="After the search wait, how many times to poll for dropdown items (~400ms each). More retries = more time for slow-rendering results. e.g. 15 retries ≈ 6s of polling.">Dropdown Retries</label>
           <input type="number" data-field="dropdownRetries" data-idx="${idx}" value="${cfg.dropdownRetries || 15}" min="1" step="1">
         </div>
@@ -577,7 +636,16 @@ function renderFieldList() {
         </div>
         <div class="full-width default-value-field" style="${(cfg.fieldType === "expand" || cfg.fieldType === "button" || cfg.fieldType === "dialog") ? "display:none" : ""}">
           <label title="Pre-filled value used when no payload value is provided. Also used as placeholder in exported JSON.">Default Value</label>
-          <input type="text" data-field="defaultValue" data-idx="${idx}" value="${esc(cfg.defaultValue || "")}">
+          ${cfg.fieldType === "checkbox"
+            ? `<div style="display:flex;align-items:center;padding:6px 0;">
+                <label class="app-toggle">
+                  <input type="checkbox" data-field="defaultValue" data-idx="${idx}" ${(cfg.defaultValue === true || cfg.defaultValue === "true") ? "checked" : ""}>
+                  <span class="toggle-track"></span>
+                </label>
+                <span class="toggle-value-label ${(cfg.defaultValue === true || cfg.defaultValue === "true") ? "is-true" : "is-false"}">${(cfg.defaultValue === true || cfg.defaultValue === "true") ? "true" : "false"}</span>
+              </div>`
+            : `<input type="text" data-field="defaultValue" data-idx="${idx}" value="${esc(cfg.defaultValue || "")}">`
+          }
         </div>
         <div class="full-width field-footer">
           <label class="toggle-label">
@@ -676,6 +744,14 @@ function handleFieldChange(e) {
     fieldConfigs[idx].dialogReturnValue = el.value === "true";
   } else if (field === "promptReturnValue") {
     fieldConfigs[idx].promptReturnValue = el.value;
+  } else if (field === "defaultValue" && el.type === "checkbox") {
+    fieldConfigs[idx].defaultValue = el.checked ? "true" : "false";
+    const lbl = el.closest(".default-value-field")?.querySelector(".toggle-value-label");
+    if (lbl) {
+      lbl.textContent = el.checked ? "true" : "false";
+      lbl.className = "toggle-value-label " + (el.checked ? "is-true" : "is-false");
+    }
+    renderPayloadForm();
   } else {
     const oldKey = fieldConfigs[idx][field];
     fieldConfigs[idx][field] = el.value;
@@ -705,6 +781,7 @@ function addField() {
         <button data-type="typeahead" class="picker-btn picker-typeahead">Typeahead</button>
         <button data-type="text" class="picker-btn picker-text">Text</button>
         <button data-type="choice" class="picker-btn picker-choice">Choice</button>
+        <button data-type="checkbox" class="picker-btn picker-checkbox">Checkbox</button>
         <button data-type="button" class="picker-btn picker-button">Button</button>
         <button data-type="expand" class="picker-btn picker-expand">Expand</button>
         <button data-type="dialog" class="picker-btn picker-dialog">Dialog</button>
@@ -725,6 +802,8 @@ function addField() {
         Object.assign(base, { fieldType: type, buttonWait: "smart_wait" });
       } else if (type === "dialog") {
         Object.assign(base, { fieldType: type, dialogType: "alert" });
+      } else if (type === "checkbox") {
+        Object.assign(base, { fieldType: type, labelMatch: [] });
       } else {
         Object.assign(base, { fieldType: type, labelMatch: [], ajaxWait: 1500, dropdownRetries: 15 });
       }
@@ -954,11 +1033,14 @@ function exportFlow() {
     }
   }
 
-  // Build a placeholder data item with only user-input fields (skip button/expand actions)
   const placeholder = {};
   for (const cfg of mergedConfigs) {
-    if (cfg.fieldType === "button" || cfg.fieldType === "expand") continue;
-    placeholder[cfg.key] = cfg.defaultValue || "";
+    if (cfg.fieldType === "button" || cfg.fieldType === "expand" || cfg.fieldType === "dialog") continue;
+    if (cfg.fieldType === "checkbox") {
+      placeholder[cfg.key] = cfg.defaultValue === true || cfg.defaultValue === "true" ? true : false;
+    } else {
+      placeholder[cfg.key] = cfg.defaultValue || "";
+    }
   }
 
   const onError = document.getElementById("flowOnError").value;

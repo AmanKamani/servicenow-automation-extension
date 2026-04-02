@@ -228,12 +228,31 @@
         continue;
       }
 
-      if (value === null || value === undefined || value === "") {
+      // Checkbox: skip only on null/undefined (false is a valid value)
+      // All other types: skip on null/undefined/empty string
+      if (cfg.fieldType === "checkbox") {
+        if (value === null || value === undefined) {
+          reportStep(`Skipping "${name}" — no value in payload for key "${cfg.key}".`, "step");
+          continue;
+        }
+      } else if (value === null || value === undefined || value === "") {
         reportStep(`Skipping "${name}" — no value in payload for key "${cfg.key}".`, "step");
         continue;
       }
 
       reportStep(`[${i + 1}/${fieldConfigs.length}] Processing "${name}" (${cfg.fieldType})...`, "step");
+
+      if (cfg.fieldType === "checkbox") {
+        const found = await waitForFieldByCfg(cfg, usedElements);
+        const el = found.el;
+        usedElements.add(el);
+        const tagInfo = `<${el.tagName.toLowerCase()}#${el.id || el.name || "?"}>`;
+        reportStep(`  Found ${tagInfo}`);
+        await fillCheckbox(el, value);
+        reportStep(`  Checkbox set: ${coerceBool(value)}`);
+        await sleep(400);
+        continue;
+      }
 
       const ajaxWait = cfg.ajaxWait || DEFAULT_AJAX_WAIT;
       const retries = cfg.dropdownRetries || DEFAULT_DROPDOWN_RETRIES;
@@ -615,6 +634,78 @@
     el.dispatchEvent(new Event("change", { bubbles: true }));
     await sleep(100);
     el.dispatchEvent(new Event("blur", { bubbles: true }));
+  }
+
+  // ────────────────────────────────────────────────────────────────
+  // Checkbox / toggle
+  // ────────────────────────────────────────────────────────────────
+
+  function coerceBool(val) {
+    if (typeof val === "boolean") return val;
+    if (typeof val === "number") return val !== 0;
+    const s = String(val).trim().toLowerCase();
+    return s === "true" || s === "yes" || s === "1";
+  }
+
+  async function fillCheckbox(el, value) {
+    const desired = coerceBool(value);
+
+    // Native <input type="checkbox"> or <input type="radio">
+    if (el.type === "checkbox" || el.type === "radio") {
+      if (el.checked !== desired) {
+        // For framework-controlled checkboxes (React/MUI/Angular), the real
+        // <input> is often hidden and the click target is a parent wrapper.
+        // Try clicking the nearest visible ancestor first, then fall back.
+        const clickTarget = el.closest("label, [role='checkbox'], .MuiCheckbox-root, .MuiFormControlLabel-root")
+          || el.parentElement
+          || el;
+        simulateClick(clickTarget);
+        await sleep(150);
+
+        // If the wrapper click didn't toggle the state, try clicking the input directly
+        if (el.checked !== desired) {
+          el.click();
+          await sleep(100);
+        }
+
+        // Last resort: force state via native property setter
+        if (el.checked !== desired) {
+          const setter = Object.getOwnPropertyDescriptor(
+            Object.getPrototypeOf(el),
+            "checked",
+          )?.set;
+          if (setter) setter.call(el, desired);
+          else el.checked = desired;
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+          el.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+      }
+      return;
+    }
+
+    // Toggle/switch with role="switch" or aria-checked
+    const ariaChecked = el.getAttribute("aria-checked");
+    if (el.getAttribute("role") === "switch" || ariaChecked !== null) {
+      const current = ariaChecked === "true";
+      if (current !== desired) {
+        el.click();
+        await sleep(200);
+      }
+      return;
+    }
+
+    // Fallback: treat as a clickable toggle — click if we want true, or if it
+    // looks currently "on" and we want false
+    const looksChecked =
+      el.classList.contains("checked") ||
+      el.classList.contains("active") ||
+      el.classList.contains("on") ||
+      el.classList.contains("selected");
+
+    if (desired !== looksChecked) {
+      el.click();
+      await sleep(200);
+    }
   }
 
   // ────────────────────────────────────────────────────────────────

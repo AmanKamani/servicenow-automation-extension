@@ -300,6 +300,25 @@ describe("buildDataTemplate", () => {
     expect(result.data[0].name).toBe("");
   });
 
+  it("uses false for checkbox placeholders", () => {
+    const checkboxConfigs = [
+      { key: "agree", displayName: "Agree", fieldType: "checkbox", enabled: true },
+    ];
+    const result = buildDataTemplate(checkboxConfigs, "Test", "template");
+    expect(result.data[0].agree).toBe(false);
+  });
+
+  it("includes checkbox fields in output (not filtered as action)", () => {
+    const checkboxConfigs = [
+      { key: "agree", displayName: "Agree", fieldType: "checkbox", enabled: true },
+      { key: "submit", displayName: "Submit", fieldType: "button", enabled: true },
+    ];
+    const result = buildDataTemplate(checkboxConfigs, "Test", "template");
+    const keys = result.fields.map((f) => f.key);
+    expect(keys).toContain("agree");
+    expect(keys).not.toContain("submit");
+  });
+
   it("sets dataTemplateFor to slugified name", () => {
     const result = buildDataTemplate(configs, "My Template", "template");
     expect(result.dataTemplateFor).toBe("my-template");

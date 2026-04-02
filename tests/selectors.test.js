@@ -3,6 +3,8 @@ const {
   findByLabelFor,
   findByAriaLabel,
   findByPlaceholder,
+  findByLabelWrap,
+  findByTextNearCheckbox,
   detectWidget,
   FIELD_STRATEGIES,
 } = require("../src/selectors.js");
@@ -14,9 +16,9 @@ beforeEach(() => {
 // ── FIELD_STRATEGIES registry ────────────────────────────────────
 
 describe("FIELD_STRATEGIES", () => {
-  it("has 3 strategies in correct order", () => {
-    expect(FIELD_STRATEGIES).toHaveLength(3);
-    expect(FIELD_STRATEGIES.map((s) => s.name)).toEqual(["labelFor", "ariaLabel", "placeholder"]);
+  it("has 5 strategies in correct order", () => {
+    expect(FIELD_STRATEGIES).toHaveLength(5);
+    expect(FIELD_STRATEGIES.map((s) => s.name)).toEqual(["labelFor", "ariaLabel", "placeholder", "labelWrap", "textNearCheckbox"]);
   });
 
   it("each strategy has a find function", () => {
@@ -145,6 +147,164 @@ describe("findByPlaceholder", () => {
     `;
     const el = document.getElementById("f1");
     expect(findByPlaceholder(["group name"], new Set([el]))).toBeNull();
+  });
+});
+
+// ── findByLabelWrap ──────────────────────────────────────────────
+
+describe("findByLabelWrap", () => {
+  it("finds checkbox wrapped inside a label without for attribute", () => {
+    document.body.innerHTML = `
+      <label>
+        <input type="checkbox" id="cb1">
+        Accept Terms
+      </label>
+    `;
+    const el = findByLabelWrap(["accept terms"], new Set());
+    expect(el).not.toBeNull();
+    expect(el.id).toBe("cb1");
+  });
+
+  it("finds radio wrapped inside a label", () => {
+    document.body.innerHTML = `
+      <label>
+        <input type="radio" id="r1" name="opt">
+        Option A
+      </label>
+    `;
+    const el = findByLabelWrap(["option a"], new Set());
+    expect(el).not.toBeNull();
+    expect(el.id).toBe("r1");
+  });
+
+  it("finds role=switch inside a label", () => {
+    document.body.innerHTML = `
+      <label>
+        <span role="switch" id="sw1" aria-checked="false"></span>
+        Dark Mode
+      </label>
+    `;
+    const el = findByLabelWrap(["dark mode"], new Set());
+    expect(el).not.toBeNull();
+    expect(el.id).toBe("sw1");
+  });
+
+  it("skips labels with for attribute (handled by labelFor)", () => {
+    document.body.innerHTML = `
+      <label for="cb1">
+        <input type="checkbox" id="cb1">
+        Accept Terms
+      </label>
+    `;
+    expect(findByLabelWrap(["accept terms"], new Set())).toBeNull();
+  });
+
+  it("returns null when no text matches", () => {
+    document.body.innerHTML = `
+      <label>
+        <input type="checkbox" id="cb1">
+        Subscribe
+      </label>
+    `;
+    expect(findByLabelWrap(["accept terms"], new Set())).toBeNull();
+  });
+
+  it("skips excluded elements", () => {
+    document.body.innerHTML = `
+      <label>
+        <input type="checkbox" id="cb1">
+        Accept Terms
+      </label>
+    `;
+    const el = document.getElementById("cb1");
+    expect(findByLabelWrap(["accept terms"], new Set([el]))).toBeNull();
+  });
+
+  it("matches nested text (e.g. text in a child element)", () => {
+    document.body.innerHTML = `
+      <label>
+        <input type="checkbox" id="cb1">
+        <p>I <strong>acknowledge</strong> this action is audited</p>
+      </label>
+    `;
+    const el = findByLabelWrap(["acknowledge"], new Set());
+    expect(el).not.toBeNull();
+    expect(el.id).toBe("cb1");
+  });
+});
+
+// ── findByTextNearCheckbox ───────────────────────────────────────
+
+describe("findByTextNearCheckbox", () => {
+  it("finds checkbox near matching text in a common ancestor", () => {
+    document.body.innerHTML = `
+      <div>
+        <input type="checkbox" id="cb1">
+        <span>Enable notifications</span>
+      </div>
+    `;
+    const el = findByTextNearCheckbox(["enable notifications"], new Set());
+    expect(el).not.toBeNull();
+    expect(el.id).toBe("cb1");
+  });
+
+  it("walks up multiple levels to find checkbox", () => {
+    document.body.innerHTML = `
+      <div class="outer">
+        <div class="inner">
+          <input type="checkbox" id="cb1">
+        </div>
+        <div class="text">
+          <p>Accept the agreement</p>
+        </div>
+      </div>
+    `;
+    const el = findByTextNearCheckbox(["accept the agreement"], new Set());
+    expect(el).not.toBeNull();
+    expect(el.id).toBe("cb1");
+  });
+
+  it("finds role=switch near text", () => {
+    document.body.innerHTML = `
+      <div>
+        <span>Dark Mode</span>
+        <div role="switch" id="sw1" aria-checked="false"></div>
+      </div>
+    `;
+    const el = findByTextNearCheckbox(["dark mode"], new Set());
+    expect(el).not.toBeNull();
+    expect(el.id).toBe("sw1");
+  });
+
+  it("returns null when no text matches", () => {
+    document.body.innerHTML = `
+      <div>
+        <input type="checkbox" id="cb1">
+        <span>Subscribe</span>
+      </div>
+    `;
+    expect(findByTextNearCheckbox(["accept terms"], new Set())).toBeNull();
+  });
+
+  it("skips excluded elements", () => {
+    document.body.innerHTML = `
+      <div>
+        <input type="checkbox" id="cb1">
+        <span>Enable notifications</span>
+      </div>
+    `;
+    const el = document.getElementById("cb1");
+    expect(findByTextNearCheckbox(["enable notifications"], new Set([el]))).toBeNull();
+  });
+
+  it("returns null when no checkbox exists near text", () => {
+    document.body.innerHTML = `
+      <div>
+        <span>Enable notifications</span>
+        <input type="text" id="t1">
+      </div>
+    `;
+    expect(findByTextNearCheckbox(["enable notifications"], new Set())).toBeNull();
   });
 });
 

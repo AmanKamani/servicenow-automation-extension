@@ -108,6 +108,11 @@
   --app-type-choice-border: var(--app-indigo-border);
   --app-type-choice-accent: var(--app-indigo);
 
+  --app-type-checkbox-bg: #ecfeff;
+  --app-type-checkbox-text: #155e75;
+  --app-type-checkbox-border: #67e8f9;
+  --app-type-checkbox-accent: #06b6d4;
+
   --app-type-dialog-bg: var(--app-orange-light);
   --app-type-dialog-text: var(--app-orange-text);
   --app-type-dialog-border: var(--app-orange-border);
