@@ -1,8 +1,11 @@
 (() => {
-  // Remove previous listener if script is re-injected into the same page
-  if (window.__snAutoFillListener) {
-    chrome.runtime.onMessage.removeListener(window.__snAutoFillListener);
+  // Remove ALL previous listeners to prevent duplicate execution
+  if (window.__snAutoFillListeners) {
+    window.__snAutoFillListeners.forEach((fn) => {
+      try { chrome.runtime.onMessage.removeListener(fn); } catch (_) {}
+    });
   }
+  window.__snAutoFillListeners = [];
   window.__snAutoFillAborted = false;
 
   const RETRY_INTERVAL = 600;
@@ -16,7 +19,7 @@
     if (window.__snAutoFillAborted) throw new Error("STOPPED");
   }
 
-  window.__snAutoFillListener = (msg, _sender, sendResponse) => {
+  const listener = (msg, _sender, sendResponse) => {
     if (msg.type === "FILL_FORM") {
       window.__snAutoFillAborted = false;
       handleFillForm(msg.payload, msg.fieldConfigs)
@@ -44,7 +47,8 @@
       return true;
     }
   };
-  chrome.runtime.onMessage.addListener(window.__snAutoFillListener);
+  window.__snAutoFillListeners.push(listener);
+  chrome.runtime.onMessage.addListener(listener);
 
   // ────────────────────────────────────────────────────────────────
   // Main orchestration
@@ -111,13 +115,14 @@
         continue;
       }
 
-      // ── Dialog field type — arm the MAIN world interceptor for alert/confirm ──
+      // ── Dialog field type — arm the MAIN world interceptor for alert/confirm/prompt ──
       if (cfg.fieldType === "dialog") {
         const dlgType = cfg.dialogType || "alert";
         const dlgReturn = cfg.dialogReturnValue !== false;
-        const desc = dlgType === "confirm" ? `confirm (return ${dlgReturn})` : "alert";
+        const promptVal = cfg.promptReturnValue || "";
+        const desc = dlgType === "confirm" ? `confirm (return ${dlgReturn})` : dlgType === "prompt" ? `prompt (return "${promptVal}")` : "alert";
         reportStep(`[${i + 1}/${fieldConfigs.length}] Arming ${desc} interceptor — will auto-dismiss next dialog.`);
-        window.postMessage({ type: "__SN_SET_DIALOG_CONFIG", dialogAction: "ok", confirmReturnValue: dlgReturn }, "*");
+        window.postMessage({ type: "__SN_SET_DIALOG_CONFIG", dialogAction: "ok", confirmReturnValue: dlgReturn, promptReturnValue: promptVal }, "*");
         await sleep(50);
         continue;
       }
@@ -137,9 +142,10 @@
         if (nextCfg && nextCfg.fieldType === "dialog") {
           const dlgType = nextCfg.dialogType || "alert";
           const dlgReturn = nextCfg.dialogReturnValue !== false;
-          const desc = dlgType === "confirm" ? `confirm (return ${dlgReturn})` : "alert";
+          const promptVal = nextCfg.promptReturnValue || "";
+          const desc = dlgType === "confirm" ? `confirm (return ${dlgReturn})` : dlgType === "prompt" ? `prompt (return "${promptVal}")` : "alert";
           reportStep(`  Pre-arming ${desc} interceptor (next field is dialog)...`);
-          window.postMessage({ type: "__SN_SET_DIALOG_CONFIG", dialogAction: "ok", confirmReturnValue: dlgReturn }, "*");
+          window.postMessage({ type: "__SN_SET_DIALOG_CONFIG", dialogAction: "ok", confirmReturnValue: dlgReturn, promptReturnValue: promptVal }, "*");
           await sleep(50);
           dialogArmed = true;
         }
@@ -169,7 +175,7 @@
                 if (!done) {
                   done = true;
                   const dtype = e.data.dialogType || "alert";
-                  const extra = dtype === "confirm" ? ` (returned ${e.data.returnValue})` : "";
+                  const extra = dtype === "confirm" ? ` (returned ${e.data.returnValue})` : dtype === "prompt" ? ` (returned "${e.data.returnValue}")` : "";
                   reportStep(`  ${dtype} auto-dismissed: "${e.data.message}"${extra}`, "step");
                   resolve();
                 }
@@ -182,13 +188,7 @@
         simulateClick(btn);
         reportStep(`  Clicked button "${btnText}".`);
 
-        if (dialogArmed) {
-          await dialogInterceptionPromise;
-          window.postMessage({ type: "__SN_CLEAR_DIALOG_CONFIG" }, "*");
-          i++; // skip the next dialog field since we already handled it
-          continue;
-        }
-
+        // Apply configured wait after click
         if (waitMode === "no_wait") {
           await sleep(300);
         } else if (waitMode === "fixed_wait") {
@@ -199,8 +199,8 @@
           reportStep(`  Waiting for URL to change...`);
           await waitForUrlChange(urlBefore, 30000);
           reportStep(`  URL changed.`);
-        } else {
-          // smart_wait: wait for next field's label or button text to appear
+        } else if (!dialogArmed) {
+          // smart_wait only when no dialog is armed (dialog interception IS the wait)
           const nextSmartCfg = fieldConfigs[i + 1];
           if (nextSmartCfg) {
             if (nextSmartCfg.fieldType === "button") {
@@ -218,6 +218,12 @@
           } else {
             await sleep(1000);
           }
+        }
+
+        if (dialogArmed) {
+          await dialogInterceptionPromise;
+          window.postMessage({ type: "__SN_CLEAR_DIALOG_CONFIG" }, "*");
+          i++; // skip the next dialog field since we already handled it
         }
         continue;
       }

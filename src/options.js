@@ -462,7 +462,7 @@ function renderFieldList() {
             <option value="choice" ${cfg.fieldType === "choice" ? "selected" : ""}>Choice (native select)</option>
             <option value="button" ${cfg.fieldType === "button" ? "selected" : ""}>Button (click)</option>
             <option value="expand" ${cfg.fieldType === "expand" ? "selected" : ""}>Expand (toggle section)</option>
-            <option value="dialog" ${cfg.fieldType === "dialog" ? "selected" : ""}>Dialog (alert/confirm)</option>
+            <option value="dialog" ${cfg.fieldType === "dialog" ? "selected" : ""}>Dialog (alert/confirm/prompt)</option>
           </select>
         </div>
         <div style="${cfg.fieldType === "dialog" ? "" : "display:none"}">
@@ -470,6 +470,7 @@ function renderFieldList() {
           <select data-field="dialogType" data-idx="${idx}">
             <option value="alert" ${(cfg.dialogType || "alert") === "alert" ? "selected" : ""}>Alert</option>
             <option value="confirm" ${cfg.dialogType === "confirm" ? "selected" : ""}>Confirm</option>
+            <option value="prompt" ${cfg.dialogType === "prompt" ? "selected" : ""}>Prompt</option>
           </select>
         </div>
         <div style="${(cfg.fieldType === "dialog" && cfg.dialogType === "confirm") ? "" : "display:none"}">
@@ -478,6 +479,10 @@ function renderFieldList() {
             <option value="true" ${(cfg.dialogReturnValue !== false) ? "selected" : ""}>true (OK)</option>
             <option value="false" ${cfg.dialogReturnValue === false ? "selected" : ""}>false (Cancel)</option>
           </select>
+        </div>
+        <div style="${(cfg.fieldType === "dialog" && cfg.dialogType === "prompt") ? "" : "display:none"}">
+          <label title="The text string to return from window.prompt(). Simulates the user typing this value and clicking OK.">Prompt Return Value</label>
+          <input type="text" data-field="promptReturnValue" data-idx="${idx}" value="${esc(cfg.promptReturnValue || "")}">
         </div>
         <div class="timeout-field" style="${(cfg.fieldType === "text" || cfg.fieldType === "button" || cfg.fieldType === "expand" || cfg.fieldType === "dialog") ? "display:none" : ""}">
           <label title="How long (ms) to wait after typing for AJAX search results to load. Slow fields like member lookup may need 5000–10000ms. Max: 60000ms.">Search Wait <small>(ms, max 60s)</small></label>
@@ -582,6 +587,8 @@ function handleFieldChange(e) {
     renderFieldList();
   } else if (field === "dialogReturnValue") {
     fieldConfigs[idx].dialogReturnValue = el.value === "true";
+  } else if (field === "promptReturnValue") {
+    fieldConfigs[idx].promptReturnValue = el.value;
   } else {
     const oldKey = fieldConfigs[idx][field];
     fieldConfigs[idx][field] = el.value;

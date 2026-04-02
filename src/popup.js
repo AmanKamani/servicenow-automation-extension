@@ -51,8 +51,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 });
 
-// Listen for automation messages from background
-chrome.runtime.onMessage.addListener((msg) => {
+// Listen for automation messages from background and content scripts
+chrome.runtime.onMessage.addListener((msg, sender) => {
+  if (sender.tab && msg.type === "AUTOMATION_RESULT") return;
   if (msg.type === "AUTOMATION_RESULT") {
     setRunning(false);
     hideProgress();
@@ -470,8 +471,18 @@ runBtn.addEventListener("click", () => {
     if (chrome.runtime.lastError) {
       setRunning(false);
       log("err", `Extension error: ${chrome.runtime.lastError.message}`);
+      return;
     }
-    // Result is handled by the AUTOMATION_RESULT onMessage listener
+    if (!response) return;
+    setRunning(false);
+    hideProgress();
+    if (response.stopped) {
+      log("warn", response.error || "Automation stopped.");
+    } else if (response.ok) {
+      log("ok", response.message || "Automation completed.");
+    } else {
+      log("err", response.error || "Unknown error.");
+    }
   });
 });
 
