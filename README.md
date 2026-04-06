@@ -26,11 +26,21 @@ This is the core of the extension. Each field on the target form is represented 
 | **Key**        | Maps to a property in the JSON payload                                                        |
 | **Display Name** | Human-readable name shown in logs                                                          |
 | **Label Match** | Comma-separated text fragments to match against visible labels on the target page             |
-| **Field Type** | `typeahead` (type + pick from dropdown), `text` (plain input), `choice` (native select), `button`, `expand`, or `dialog` |
+| **Field Type** | `typeahead`, `text`, `choice`, `checkbox`, `button`, `expand`, `dialog` |
 | **AJAX Wait**  | Milliseconds to wait after typing before looking for dropdown suggestions                     |
 | **Enabled**    | Toggle to skip a field without deleting it                                                    |
 
 Fields are filled **in the exact order shown** in the list. Use the arrow buttons to reorder.
+
+### Supported Field Types
+
+- `typeahead` — types text and selects matching result from dynamic/searchable dropdowns
+- `text` — fills plain text inputs and textareas
+- `choice` — selects values in native `<select>` elements
+- `checkbox` — sets checkbox/switch-like controls to `true`/`false`
+- `button` — finds and clicks a button/action element
+- `expand` — clicks an expand/toggle control to reveal hidden fields
+- `dialog` — intercepts native browser dialogs (`alert`, `confirm`, `prompt`)
 
 ### Templates
 
@@ -71,14 +81,47 @@ A sample file is included at `sample-input.json`.
 
 ## How Field Matching Works
 
-For each configured field, the extension:
+For each configured field, the extension tries finder strategies in this exact order (first match wins):
 
-1. Scans all visible labels on the page for any of the **Label Match** fragments.
-2. From the matching label, reads the `for` attribute to locate the associated input element.
-3. Keeps track of which elements have already been used, so no two fields target the same input.
-4. Fills the value using the handler for the configured **Field Type**.
+1. `labelFor` — match `<label for="...">` text, then resolve linked input by id
+2. `ariaLabel` — match elements by `aria-label`
+3. `placeholder` — match `input/textarea` placeholder text
+4. `labelWrap` — match labels that wrap checkbox/radio/switch controls
+5. `textNearCheckbox` — find checkbox/switch controls near matching text nodes
+
+After finding an element, the extension tracks used elements so no two fields target the same input.
+
+### Strategy Eligibility (All fields vs specific fields)
+
+- `labelFor`, `ariaLabel`, `placeholder` are general strategies and are eligible for most field types.
+- `labelWrap` and `textNearCheckbox` are checkbox-oriented strategies (checkbox/radio/switch DOM patterns).
+- The engine always runs one ordered pipeline; practical applicability depends on page DOM and field type.
 
 If a field can't be found, the extension stops with a detailed error showing the label match text and field type — so you know exactly what to fix in Options.
+
+### Quick Matching Examples
+
+Checkbox via wrapped label (uses `labelWrap`):
+
+```json
+{
+  "key": "acknowledgeRisk",
+  "displayName": "Acknowledge Risk",
+  "fieldType": "checkbox",
+  "labelMatch": ["I acknowledge that this action is"]
+}
+```
+
+Switch near text (uses `textNearCheckbox` fallback):
+
+```json
+{
+  "key": "darkMode",
+  "displayName": "Dark Mode",
+  "fieldType": "checkbox",
+  "labelMatch": ["dark mode"]
+}
+```
 
 ## Adjusting Label Matches
 
@@ -160,5 +203,6 @@ See [docs/upcomingFeatures.md](docs/upcomingFeatures.md) for planned features an
 - **"No active tab found"** — Make sure the target page is the focused tab.
 - **"Active tab does not match configured domain"** — Check the domain in Options.
 - **"Could not find field: ..."** — The label match text doesn't match any label on the page. Update it in Options.
+- **Field still not found after update** — For checkbox/switch controls, use a unique nearby text fragment in `Label Match` so `labelWrap`/`textNearCheckbox` can find it.
 - **Dropdown not matching** — Increase AJAX Wait in Options. Check the browser console (F12) for `[AutoFill]` logs.
 - **Field targeting wrong input** — Reorder fields in Options so the correct one is processed first. The extension tracks used elements to prevent duplicates.
