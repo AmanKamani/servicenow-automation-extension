@@ -1,1 +1,5 @@
-npm test
+staged_files=$(git diff --cached --name-only --diff-filter=ACMR)
+
+if echo "$staged_files" | grep -qvE '\.md$'; then
+  npm test
+fi
