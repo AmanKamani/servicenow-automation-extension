@@ -45,6 +45,15 @@ function downloadJson(data, filename) {
   URL.revokeObjectURL(url);
 }
 
+function stripFieldConfigMeta(fieldConfigs) {
+  return JSON.parse(JSON.stringify(fieldConfigs || [])).map((cfg) => {
+    if (cfg && typeof cfg === "object" && cfg.meta) {
+      delete cfg.meta;
+    }
+    return cfg;
+  });
+}
+
 function buildTemplateShareExport(template) {
   return {
     configVersion: CONFIG_VERSION,
@@ -54,7 +63,7 @@ function buildTemplateShareExport(template) {
     template: {
       key: template.key || "",
       name: template.name,
-      fieldConfigs: JSON.parse(JSON.stringify(template.fieldConfigs || [])),
+      fieldConfigs: stripFieldConfigMeta(template.fieldConfigs),
     },
   };
 }
@@ -63,7 +72,7 @@ function buildFlowShareExport(flow, resolvedTemplates) {
   const tplExports = resolvedTemplates.map((tpl) => ({
     key: tpl.key || "",
     name: tpl.name,
-    fieldConfigs: JSON.parse(JSON.stringify(tpl.fieldConfigs || [])),
+    fieldConfigs: stripFieldConfigMeta(tpl.fieldConfigs),
   }));
 
   return {
@@ -126,7 +135,36 @@ function parseShareImport(jsonString) {
     }
   }
 
-  return parsed;
+  if (type === "template") {
+    return {
+      configVersion: parsed.configVersion,
+      exportType: "template",
+      template: {
+        key: parsed.template.key || "",
+        name: parsed.template.name,
+        fieldConfigs: stripFieldConfigMeta(parsed.template.fieldConfigs),
+      },
+    };
+  }
+
+  return {
+    configVersion: parsed.configVersion,
+    exportType: "flow",
+    flow: {
+      key: parsed.flow.key || "",
+      name: parsed.flow.name,
+      startUrl: parsed.flow.startUrl || "",
+      alwaysNavigate: parsed.flow.alwaysNavigate !== false,
+      onError: parsed.flow.onError || "stop",
+      retryFallback: parsed.flow.retryFallback,
+      templateKeys: Array.isArray(parsed.flow.templateKeys) ? parsed.flow.templateKeys : [],
+    },
+    templates: parsed.templates.map((tpl) => ({
+      key: tpl.key || "",
+      name: tpl.name,
+      fieldConfigs: stripFieldConfigMeta(tpl.fieldConfigs),
+    })),
+  };
 }
 
 function findDuplicateTemplate(incomingKey, incomingName, existingTemplates) {

@@ -122,6 +122,12 @@ h2 {
 
 #flowSelect { margin-bottom: 8px; }
 
+.last-updated-hint {
+  margin-top: 6px;
+  font-size: var(--app-font-sm);
+  color: var(--app-text-faint);
+}
+
 .upload-section {
   margin-bottom: 14px;
 }

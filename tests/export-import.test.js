@@ -86,7 +86,8 @@ describe("buildTemplateShareExport", () => {
   const template = {
     key: "test-key-abc",
     name: "Test Template",
-    fieldConfigs: [{ key: "f1", fieldType: "text" }],
+    fieldConfigs: [{ key: "f1", fieldType: "text", meta: { createdAt: "x", updatedAt: "y" } }],
+    meta: { createdAt: "x", updatedAt: "y" },
     someOtherData: "should not leak",
   };
 
@@ -112,6 +113,12 @@ describe("buildTemplateShareExport", () => {
     expect(exp.template.someOtherData).toBeUndefined();
   });
 
+  it("does not export local metadata", () => {
+    const exp = buildTemplateShareExport(template);
+    expect(exp.template.meta).toBeUndefined();
+    expect(exp.template.fieldConfigs[0].meta).toBeUndefined();
+  });
+
   it("deep copies fieldConfigs (mutation safe)", () => {
     const exp = buildTemplateShareExport(template);
     exp.template.fieldConfigs[0].key = "mutated";
@@ -130,8 +137,8 @@ describe("buildFlowShareExport", () => {
     retryFallback: "skip",
   };
   const templates = [
-    { key: "tpl-1", name: "T1", fieldConfigs: [] },
-    { key: "tpl-2", name: "T2", fieldConfigs: [{ key: "x" }] },
+    { key: "tpl-1", name: "T1", fieldConfigs: [], meta: { createdAt: "x", updatedAt: "y" } },
+    { key: "tpl-2", name: "T2", fieldConfigs: [{ key: "x", meta: { createdAt: "a", updatedAt: "b" } }] },
   ];
 
   it("sets exportType to flow", () => {
@@ -159,6 +166,12 @@ describe("buildFlowShareExport", () => {
     const stopFlow = { ...flow, onError: "stop" };
     const exp = buildFlowShareExport(stopFlow, templates);
     expect(exp.flow.retryFallback).toBeUndefined();
+  });
+
+  it("does not export local metadata from templates/fields", () => {
+    const exp = buildFlowShareExport(flow, templates);
+    expect(exp.templates[0].meta).toBeUndefined();
+    expect(exp.templates[1].fieldConfigs[0].meta).toBeUndefined();
   });
 });
 
@@ -202,6 +215,24 @@ describe("parseShareImport", () => {
     const result = parseShareImport(JSON.stringify(input));
     expect(result.exportType).toBe("template");
     expect(result.template.name).toBe("T");
+  });
+
+  it("sanitizes metadata and unknown fields on parse", () => {
+    const input = {
+      configVersion: 1,
+      exportType: "template",
+      extraTopLevel: "ignore-me",
+      template: {
+        key: "k",
+        name: "T",
+        meta: { createdAt: "x", updatedAt: "y" },
+        fieldConfigs: [{ key: "a", fieldType: "text", meta: { createdAt: "x", updatedAt: "y" } }],
+      },
+    };
+    const result = parseShareImport(JSON.stringify(input));
+    expect(result.extraTopLevel).toBeUndefined();
+    expect(result.template.meta).toBeUndefined();
+    expect(result.template.fieldConfigs[0].meta).toBeUndefined();
   });
 
   it("parses valid flow export", () => {

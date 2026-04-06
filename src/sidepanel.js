@@ -10,6 +10,8 @@ const flowSelect = document.getElementById("flowSelect");
 const flowConfigLink = document.getElementById("flowConfigLink");
 const flowDataFile = document.getElementById("flowDataFile");
 const flowFileNameDisplay = document.getElementById("flowFileNameDisplay");
+const templateUpdatedHint = document.getElementById("lastUpdatedHint");
+const flowUpdatedHint = document.getElementById("lastUpdatedHintFlow");
 const progressDisplay = document.getElementById("progressDisplay");
 const progressBar = document.getElementById("progressBar");
 const progressText = document.getElementById("progressText");
@@ -62,6 +64,29 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (response.progress) {
         updateProgress(response.progress.current, response.progress.total);
       }
+    }
+  });
+
+  // Keep sidepanel in sync when options page (or another tab) saves changes
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "sync") return;
+
+    let templatesChanged = false;
+    let flowsChanged = false;
+
+    for (const key of Object.keys(changes)) {
+      storageData[key] = changes[key].newValue;
+      if (key === STORAGE_KEYS.TEMPLATES) templatesChanged = true;
+      if (key === STORAGE_KEYS.FLOWS) flowsChanged = true;
+    }
+
+    if (templatesChanged) {
+      populateTemplates();
+      if (currentMode === "template") loadSelectedTemplate();
+    }
+    if (flowsChanged) {
+      populateFlows();
+      if (currentMode === "flow") loadSelectedFlow();
     }
   });
 });
@@ -148,6 +173,10 @@ function resetState() {
   flowRetryFallback = "skip";
   runBtn.disabled = true;
   preview.classList.add("hidden");
+  templateUpdatedHint.classList.add("hidden");
+  templateUpdatedHint.textContent = "";
+  flowUpdatedHint.classList.add("hidden");
+  flowUpdatedHint.textContent = "";
   hideProgress();
 }
 
@@ -277,6 +306,7 @@ function loadSelectedTemplate() {
       resetState();
       return;
     }
+    setUpdatedHint(templateUpdatedHint, tpl, "template");
 
     const ACTION_TYPES = ["button", "expand", "dialog"];
     const configs = (tpl.fieldConfigs || []).filter((f) => f.enabled !== false);
@@ -348,6 +378,7 @@ function loadSelectedFlow() {
       resetState();
       return;
     }
+    setUpdatedHint(flowUpdatedHint, flow, "flow");
 
     const mergedConfigs = [];
     for (const tplId of (flow.templateIds || [])) {
@@ -601,6 +632,20 @@ function showPreviewError(errors) {
   preview.classList.remove("hidden");
   preview.textContent = errors.join("\n");
   preview.style.color = "#dc2626";
+}
+
+function setUpdatedHint(targetEl, entity, label) {
+  if (!targetEl) return;
+  const ts = entity?.meta?.updatedAt;
+  if (!ts) {
+    targetEl.classList.add("hidden");
+    targetEl.textContent = "";
+    return;
+  }
+  const d = new Date(ts);
+  const text = Number.isNaN(d.getTime()) ? "unknown" : d.toLocaleString();
+  targetEl.textContent = `Last ${label} update: ${text}`;
+  targetEl.classList.remove("hidden");
 }
 
 function log(level, message) {

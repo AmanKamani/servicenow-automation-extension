@@ -186,10 +186,16 @@ body {
 .tpl-item-meta {
   font-size: var(--app-font-badge);
   color: var(--app-text-faint);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   margin-top: 2px;
+  line-height: 1.35;
+}
+
+.tpl-item-updated {
+  display: block;
+  font-size: var(--app-font-badge);
+  color: var(--app-text-faint);
+  margin-top: 1px;
+  line-height: 1.35;
 }
 
 .tpl-item-key {
@@ -257,6 +263,17 @@ body {
 }
 
 .editor-key-display.hidden {
+  display: none;
+}
+
+.editor-meta-display {
+  width: 100%;
+  font-size: var(--app-font-sm);
+  color: var(--app-text-faint);
+  margin-top: -4px;
+}
+
+.editor-meta-display.hidden {
   display: none;
 }
 

@@ -13,6 +13,46 @@ let _autoSaveTimer = null;
 // Track which editor is active: "template", "flow", or null
 let activeEditorType = null;
 
+function touchMeta(entity, isNew = false) {
+  if (!entity || typeof entity !== "object") return;
+  if (!entity.meta || typeof entity.meta !== "object") entity.meta = {};
+  const now = new Date().toISOString();
+  if (isNew || !entity.meta.createdAt) entity.meta.createdAt = now;
+  entity.meta.updatedAt = now;
+}
+
+function formatDateTime(ts) {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString();
+}
+
+function formatDateTimeShort(ts) {
+  if (!ts) return "unknown";
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "unknown";
+  return d.toLocaleString([], {
+    year: "2-digit",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function updateEntityMetaDisplay(elId, entity) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (!entity || !entity.meta) {
+    el.textContent = "";
+    el.classList.add("hidden");
+    return;
+  }
+  el.textContent = `Created: ${formatDateTime(entity.meta.createdAt)} • Updated: ${formatDateTime(entity.meta.updatedAt)}`;
+  el.classList.remove("hidden");
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   const data = await loadOrMigrateStorage();
 
@@ -119,15 +159,18 @@ function renderTemplateList() {
   templates.forEach((tpl, idx) => {
     const fieldCount = (tpl.fieldConfigs || []).length;
     const isActive = activeTemplateId === tpl.id;
+    const updatedText = tpl.meta?.updatedAt ? `Updated ${formatDateTimeShort(tpl.meta.updatedAt)}` : "";
 
     const item = document.createElement("div");
     item.className = "tpl-item" + (isActive ? " active" : "");
     item.dataset.tplIdx = idx;
     const keyHtml = tpl.key ? `<span class="tpl-item-key" title="${esc(tpl.key)}">${esc(tpl.key)}</span>` : "";
+    const updatedHtml = updatedText ? `<span class="tpl-item-updated">${esc(updatedText)}</span>` : "";
     item.innerHTML = `
       <div class="tpl-item-info">
         <span class="tpl-item-name">${esc(tpl.name)}</span>
         <span class="tpl-item-meta">${fieldCount} field(s)</span>
+        ${updatedHtml}
         ${keyHtml}
       </div>
     `;
@@ -260,6 +303,7 @@ function startNewTemplate() {
   const keyEl = document.getElementById("templateKeyDisplay");
   keyEl.textContent = "";
   keyEl.classList.add("hidden");
+  updateEntityMetaDisplay("templateMetaDisplay", null);
   renderFieldList();
   renderPayloadForm();
   renderTemplateList();
@@ -284,6 +328,7 @@ function loadTemplate(tpl) {
     keyEl.textContent = "";
     keyEl.classList.add("hidden");
   }
+  updateEntityMetaDisplay("templateMetaDisplay", tpl);
   fieldConfigs = JSON.parse(JSON.stringify(tpl.fieldConfigs || []));
   payloadValues = JSON.parse(JSON.stringify(tpl.payload || {}));
 
@@ -307,10 +352,12 @@ function handleSaveNew() {
     payload: readPayloadFromForm(),
     fieldConfigs: JSON.parse(JSON.stringify(fieldConfigs)),
   };
+  touchMeta(newTpl, true);
 
   templates.push(newTpl);
   activeTemplateId = newTpl.id;
   persistTemplates();
+  updateEntityMetaDisplay("templateMetaDisplay", newTpl);
   renderTemplateList();
   updateActionButtons();
   showToast(`Template "${name}" saved.`);
@@ -326,6 +373,8 @@ function handleUpdate() {
   tpl.name = name;
   tpl.payload = readPayloadFromForm();
   tpl.fieldConfigs = JSON.parse(JSON.stringify(fieldConfigs));
+  touchMeta(tpl);
+  updateEntityMetaDisplay("templateMetaDisplay", tpl);
 
   persistTemplates();
   renderTemplateList();
@@ -341,11 +390,13 @@ function handleDuplicate() {
     payload: readPayloadFromForm(),
     fieldConfigs: JSON.parse(JSON.stringify(fieldConfigs)),
   };
+  touchMeta(dup, true);
 
   templates.push(dup);
   activeTemplateId = dup.id;
   document.getElementById("templateNameInput").value = name;
   persistTemplates();
+  updateEntityMetaDisplay("templateMetaDisplay", dup);
   renderTemplateList();
   updateActionButtons();
   showToast(`Duplicated as "${name}".`);
@@ -856,6 +907,8 @@ function autoSave() {
   if (name) tpl.name = name;
   tpl.payload = readPayloadFromForm();
   tpl.fieldConfigs = JSON.parse(JSON.stringify(fieldConfigs));
+  touchMeta(tpl);
+  updateEntityMetaDisplay("templateMetaDisplay", tpl);
 
   persistTemplates();
   renderTemplateList();
@@ -891,15 +944,18 @@ function renderFlowList() {
   flows.forEach((flow, idx) => {
     const tplCount = (flow.templateIds || []).length;
     const isActive = activeFlowId === flow.id;
+    const updatedText = flow.meta?.updatedAt ? `Updated ${formatDateTimeShort(flow.meta.updatedAt)}` : "";
 
     const item = document.createElement("div");
     item.className = "tpl-item" + (isActive ? " active" : "");
     item.dataset.flowIdx = idx;
     const keyHtml = flow.key ? `<span class="tpl-item-key" title="${esc(flow.key)}">${esc(flow.key)}</span>` : "";
+    const updatedHtml = updatedText ? `<span class="tpl-item-updated">${esc(updatedText)}</span>` : "";
     item.innerHTML = `
       <div class="tpl-item-info">
         <span class="tpl-item-name">${esc(flow.name)}</span>
         <span class="tpl-item-meta">${tplCount} template(s)</span>
+        ${updatedHtml}
         ${keyHtml}
       </div>
     `;
@@ -926,6 +982,7 @@ function startNewFlow() {
   const keyEl = document.getElementById("flowKeyDisplay");
   keyEl.textContent = "";
   keyEl.classList.add("hidden");
+  updateEntityMetaDisplay("flowMetaDisplay", null);
   document.getElementById("flowStartUrl").value = "";
   document.getElementById("flowAlwaysNavigate").checked = true;
   document.getElementById("flowOnError").value = "stop";
@@ -953,6 +1010,7 @@ function loadFlow(flow) {
     keyEl.textContent = "";
     keyEl.classList.add("hidden");
   }
+  updateEntityMetaDisplay("flowMetaDisplay", flow);
   document.getElementById("flowStartUrl").value = flow.startUrl || "";
   document.getElementById("flowAlwaysNavigate").checked = flow.alwaysNavigate !== false;
   document.getElementById("flowOnError").value = flow.onError || "stop";
@@ -979,10 +1037,12 @@ function handleSaveFlow() {
     onError,
     retryFallback: onError === "retry" ? document.getElementById("flowRetryFallback").value : undefined,
   };
+  touchMeta(newFlow, true);
 
   flows.push(newFlow);
   activeFlowId = newFlow.id;
   persistFlows();
+  updateEntityMetaDisplay("flowMetaDisplay", newFlow);
   renderFlowList();
   updateActionButtons();
   showToast(`Flow "${name}" saved.`);
@@ -1002,6 +1062,8 @@ function handleUpdateFlow() {
   flow.alwaysNavigate = document.getElementById("flowAlwaysNavigate").checked;
   flow.onError = onError;
   flow.retryFallback = onError === "retry" ? document.getElementById("flowRetryFallback").value : undefined;
+  touchMeta(flow);
+  updateEntityMetaDisplay("flowMetaDisplay", flow);
 
   persistFlows();
   renderFlowList();
@@ -1192,6 +1254,8 @@ function autoSaveFlow() {
   const onError = document.getElementById("flowOnError").value;
   flow.onError = onError;
   flow.retryFallback = onError === "retry" ? document.getElementById("flowRetryFallback").value : undefined;
+  touchMeta(flow);
+  updateEntityMetaDisplay("flowMetaDisplay", flow);
 
   persistFlows();
   renderFlowList();
@@ -1239,6 +1303,7 @@ async function handleImportTemplate(e) {
       dup.match.key = incoming.key || dup.match.key;
       dup.match.fieldConfigs = JSON.parse(JSON.stringify(incoming.fieldConfigs));
       dup.match.payload = {};
+      touchMeta(dup.match);
       persistTemplates();
       loadTemplate(dup.match);
       showToast(`Template "${incoming.name}" replaced.`);
@@ -1254,6 +1319,7 @@ async function handleImportTemplate(e) {
     payload: {},
     fieldConfigs: JSON.parse(JSON.stringify(incoming.fieldConfigs)),
   };
+  touchMeta(newTpl, true);
   templates.push(newTpl);
   persistTemplates();
   loadTemplate(newTpl);
@@ -1330,6 +1396,7 @@ async function handleImportFlow(e) {
         tplDup.match.key = tplData.key || tplDup.match.key;
         tplDup.match.fieldConfigs = JSON.parse(JSON.stringify(tplData.fieldConfigs));
         tplDup.match.payload = {};
+        touchMeta(tplDup.match);
         collectedTemplateIds.push(tplDup.match.id);
       } else if (tplChoice === "attach") {
         collectedTemplateIds.push(tplDup.match.id);
@@ -1342,6 +1409,7 @@ async function handleImportFlow(e) {
           payload: {},
           fieldConfigs: JSON.parse(JSON.stringify(tplData.fieldConfigs)),
         };
+        touchMeta(newTpl, true);
         templates.push(newTpl);
         collectedTemplateIds.push(newTpl.id);
       }
@@ -1353,6 +1421,7 @@ async function handleImportFlow(e) {
         payload: {},
         fieldConfigs: JSON.parse(JSON.stringify(tplData.fieldConfigs)),
       };
+      touchMeta(newTpl, true);
       templates.push(newTpl);
       collectedTemplateIds.push(newTpl.id);
     }
@@ -1366,6 +1435,7 @@ async function handleImportFlow(e) {
     targetFlow.onError = incomingFlow.onError || "stop";
     targetFlow.retryFallback = incomingFlow.retryFallback;
     targetFlow.templateIds = collectedTemplateIds;
+    touchMeta(targetFlow);
     persistTemplates();
     persistFlows();
     loadFlow(targetFlow);
@@ -1382,6 +1452,7 @@ async function handleImportFlow(e) {
       onError: incomingFlow.onError || "stop",
       retryFallback: incomingFlow.retryFallback,
     };
+    touchMeta(newFlow, true);
     flows.push(newFlow);
     persistTemplates();
     persistFlows();
